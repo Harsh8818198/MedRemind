@@ -1924,3 +1924,219 @@ body {
     transform: scale(1.03);
 }
 
+/* ==========================================
+   Patients Dashboard Grid Layout & Profile Cards
+   ========================================== */
+
+.patients-grid-layout {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 24px;
+    width: 100%;
+    margin-top: 10px;
+}
+
+/* Glassmorphic Golden/Warm Slate Card */
+.patient-profile-card {
+    background: rgba(19, 17, 15, 0.45);
+    border: 1px solid rgba(197, 160, 89, 0.08);
+    border-radius: 24px;
+    padding: 24px;
+    backdrop-filter: blur(16px);
+    position: relative;
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    box-shadow: 0 10px 30px 0 rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+
+.patient-profile-card:hover {
+    transform: translateY(-5px);
+    border-color: rgba(197, 160, 89, 0.35);
+    box-shadow: 0 16px 40px 0 rgba(197, 160, 89, 0.07);
+    background: rgba(19, 17, 15, 0.55);
+}
+
+/* Border highlighting for active cognitive decline warning */
+.patient-decline-card-border {
+    border-color: rgba(244, 63, 94, 0.3) !important;
+}
+.patient-decline-card-border:hover {
+    border-color: rgba(244, 63, 94, 0.65) !important;
+    box-shadow: 0 16px 40px 0 rgba(244, 63, 94, 0.08) !important;
+}
+
+/* Pulsing Red Alert Banner */
+.patient-decline-card-alert {
+    background: rgba(244, 63, 94, 0.08);
+    border: 1px solid rgba(244, 63, 94, 0.25);
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 11.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--txt-primary);
+    font-weight: 600;
+    margin-bottom: -4px;
+    animation: alertBorderPulse 2s infinite ease-in-out;
+}
+
+.patient-decline-card-alert svg {
+    color: #F43F5E;
+    width: 14px;
+    height: 14px;
+}
+
+@keyframes alertBorderPulse {
+    0% { border-color: rgba(244, 63, 94, 0.25); background: rgba(244, 63, 94, 0.08); }
+    50% { border-color: rgba(244, 63, 94, 0.6); background: rgba(244, 63, 94, 0.15); }
+    100% { border-color: rgba(244, 63, 94, 0.25); background: rgba(244, 63, 94, 0.08); }
+}
+
+.alert-ico-pulse {
+    animation: iconPulseScale 1.5s infinite ease-in-out;
+}
+
+@keyframes iconPulseScale {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+/* Card Header */
+.patient-card-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.patient-card-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 2px solid var(--clr-primary);
+    object-fit: cover;
+    background-color: rgba(255,255,255,0.05);
+}
+
+.patient-card-identity {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.patient-card-name {
+    font-family: 'Outfit', sans-serif;
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--txt-primary);
+    letter-spacing: -0.3px;
+}
+
+.patient-card-role {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--txt-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Three Column Numeric Stats Display */
+.patient-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.015);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    border-radius: 16px;
+    padding: 12px 8px;
+    text-align: center;
+}
+
+.patient-stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.patient-stat-lbl {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: var(--txt-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.patient-stat-val {
+    font-family: 'Outfit', sans-serif;
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--txt-primary);
+}
+
+/* Time & moon/sun row entries */
+.patient-meds-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.patient-med-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.01);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.patient-med-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--txt-secondary);
+}
+
+.patient-med-time {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--clr-primary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.patient-med-time svg {
+    width: 12px;
+    height: 12px;
+    stroke-width: 2.2px;
+}
+
+/* Action button row */
+.patient-card-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.patient-card-actions .btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 10px;
+}
+
+.patient-card-actions .btn svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2.2px;
+}
+

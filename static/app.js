@@ -87,6 +87,9 @@ async function loadReminders() {
         // 3. Render Dashboard Naye Cozy Schedule Panel
         renderTodayScheduleList();
         
+        // 4. Render Caregiver Patients Board
+        renderPatientsDashboard();
+        
         // Dynamic Lucide rendering
         if (window.lucide) {
             lucide.createIcons();
@@ -121,6 +124,8 @@ function getPatientAvatar(name) {
         return "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=120&auto=format&fit=crop";
     } else if (key.includes("grandpa") || key.includes("father") || key.includes("dad") || key.includes("grandfather")) {
         return "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=120&auto=format&fit=crop";
+    } else if (key.includes("grandma") || key.includes("grandmother") || key.includes("nani") || key.includes("dadi")) {
+        return "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?q=80&w=120&auto=format&fit=crop";
     } else {
         return "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=120&auto=format&fit=crop";
     }
@@ -315,6 +320,9 @@ async function loadLogs() {
         
         // 4. Render Full-width Audit Log View
         renderLogsBoard(data.logs);
+        
+        // 5. Render Caregiver Patients Board
+        renderPatientsDashboard();
         
         // Dynamic Lucide rendering
         if (window.lucide) {
@@ -757,7 +765,8 @@ function initTabSwitcher() {
         { id: "nav-dashboard", viewId: "view-dashboard", title: "Care Portal", subtitle: "Real-time medication adherence & proactive patient diagnostics" },
         { id: "nav-insights", viewId: "view-insights", title: "Clinical Insights", subtitle: "Machine learning risk forecasts, cognitive trends, and emergency escalations" },
         { id: "nav-reminders", viewId: "view-schedule", title: "Medication Scheduler", subtitle: "Manage active schedules, patient details, and background reminder alerts" },
-        { id: "nav-activity", viewId: "view-activity", title: "Audit Log Database", subtitle: "Review call outcomes, detailed transcripts, and historical adherence tracking" }
+        { id: "nav-activity", viewId: "view-activity", title: "Audit Log Database", subtitle: "Review call outcomes, detailed transcripts, and historical adherence tracking" },
+        { id: "nav-patients", viewId: "view-patients", title: "Patients Dashboard", subtitle: "Patient profiles, clinical summaries, individual adherence, and cognitive monitoring" }
     ];
 
     tabs.forEach(t => {
@@ -981,8 +990,10 @@ function injectRiskBadge(row, riskInfo, insertIndex) {
     `;
 }
 
+let currentInsightsPatient = "Grandpa";
+
 async function loadInsightsData() {
-    const patientName = "Grandpa"; // Default monitoring patient
+    const patientName = currentInsightsPatient;
     
     try {
         const response = await fetch(`/api/analytics/cognitive/${patientName}`);
@@ -1481,7 +1492,8 @@ function initMockupBindings() {
     const quickPatientsBtn = document.getElementById("btn-quick-view-patients");
     if (quickPatientsBtn) {
         quickPatientsBtn.onclick = () => {
-            alert("Patient profile cards: Grandpa (adherence high), Mom (adherence medium).");
+            const patientsTab = document.getElementById("nav-patients");
+            if (patientsTab) patientsTab.click();
         };
     }
     
@@ -1494,5 +1506,199 @@ function initMockupBindings() {
         };
     }
 }
+
+// ==========================================================================
+// 9. Caregiver Multi-Patient Profile Grid Rendering & Logic
+// ==========================================================================
+
+let patientCognitiveStatus = {};
+
+function renderPatientsDashboard() {
+    const container = document.getElementById("patients-cards-container");
+    if (!container) return;
+    
+    // Aggregate unique patient names
+    const defaultPatients = ["Grandpa", "Mom", "Grandma"];
+    const patientNameMap = new Map();
+    defaultPatients.forEach(p => patientNameMap.set(p.toLowerCase(), p));
+    cachedReminders.forEach(r => {
+        if (r.patient) patientNameMap.set(r.patient.toLowerCase().trim(), r.patient.trim());
+    });
+    cachedLogs.forEach(l => {
+        if (l.patient) patientNameMap.set(l.patient.toLowerCase().trim(), l.patient.trim());
+    });
+    const patientNames = Array.from(patientNameMap.values());
+    
+    container.innerHTML = "";
+    
+    patientNames.forEach(name => {
+        // Asynchronously fetch cognitive trend data if not already cached
+        if (!patientCognitiveStatus[name]) {
+            patientCognitiveStatus[name] = { loading: true, decline_flag: false };
+            fetchPatientCognitiveData(name);
+        }
+        
+        const pReminders = cachedReminders.filter(r => r.patient.toLowerCase().trim() === name.toLowerCase().trim());
+        const pLogs = cachedLogs.filter(l => l.patient.toLowerCase().trim() === name.toLowerCase().trim());
+        
+        // Calculate statistics
+        const totalCalls = pLogs.length;
+        const takenCalls = pLogs.filter(l => ["TAKEN", "TAKEN_EARLIER"].includes(l.outcome)).length;
+        const adherenceRate = totalCalls > 0 ? Math.round((takenCalls / totalCalls) * 100) : 100; // Baseline to 100 if no calls yet
+        
+        // Get latest coherence
+        let latestCoherence = 100;
+        if (pLogs.length > 0) {
+            const sortedLogs = [...pLogs].sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+            const lastLog = sortedLogs[sortedLogs.length - 1];
+            if (lastLog && lastLog.coherence_score !== undefined && lastLog.coherence_score !== null) {
+                latestCoherence = Math.round(lastLog.coherence_score * 100);
+            }
+        }
+        
+        // Get average latency
+        let avgLatency = "N/A";
+        const logsWithLatency = pLogs.filter(l => l.response_latency_sec !== undefined && l.response_latency_sec !== null);
+        if (logsWithLatency.length > 0) {
+            const sumLatency = logsWithLatency.reduce((sum, l) => sum + l.response_latency_sec, 0);
+            avgLatency = `${(sumLatency / logsWithLatency.length).toFixed(1)}s`;
+        }
+        
+        // Fetch cached cognitive status
+        const cognitiveData = patientCognitiveStatus[name];
+        const hasDecline = cognitiveData && cognitiveData.decline_flag;
+        
+        // Build meds list
+        let medsListHtml = "";
+        if (pReminders.length === 0) {
+            medsListHtml = `<div class="empty-list-text" style="font-size:11px; padding: 4px 0;">No active scheduled medications.</div>`;
+        } else {
+            pReminders.forEach(r => {
+                const isNight = r.time >= "18:00" || r.time < "06:00";
+                medsListHtml += `
+                    <div class="patient-med-row">
+                        <span class="patient-med-name">${escapeHtml(r.medication)} (${escapeHtml(r.dosage)})</span>
+                        <span class="patient-med-time">
+                            <i data-lucide="${isNight ? 'moon' : 'sun'}"></i> ${formatTime12h(r.time)}
+                        </span>
+                    </div>
+                `;
+            });
+        }
+        
+        // Set dynamic avatar
+        const avatarUrl = getPatientAvatar(name);
+        
+        // Create card element
+        const card = document.createElement("div");
+        card.className = "patient-profile-card";
+        if (hasDecline) {
+            card.classList.add("patient-decline-card-border");
+        }
+        
+        // Warning Banner if decline detected
+        const warningBannerHtml = hasDecline ? `
+            <div class="patient-decline-card-alert">
+                <i data-lucide="shield-alert" class="alert-ico-pulse"></i>
+                <span>Potential Cognitive Health Decline Detected</span>
+            </div>
+        ` : "";
+        
+        card.innerHTML = `
+            ${warningBannerHtml}
+            <div class="patient-card-header">
+                <img src="${avatarUrl}" alt="${escapeHtml(name)}" class="patient-card-avatar">
+                <div class="patient-card-identity">
+                    <span class="patient-card-name">${escapeHtml(name)}</span>
+                    <span class="patient-card-role">Family Member</span>
+                </div>
+            </div>
+            
+            <div class="patient-stats-grid">
+                <div class="patient-stat-item">
+                    <span class="patient-stat-lbl">Adherence</span>
+                    <span class="patient-stat-val ${adherenceRate >= 80 ? 'text-green' : adherenceRate >= 50 ? 'text-amber' : 'text-red'}">${adherenceRate}%</span>
+                </div>
+                <div class="patient-stat-item">
+                    <span class="patient-stat-lbl">Coherence</span>
+                    <span class="patient-stat-val ${latestCoherence >= 80 ? 'text-green' : latestCoherence >= 50 ? 'text-amber' : 'text-red'}">${latestCoherence}%</span>
+                </div>
+                <div class="patient-stat-item">
+                    <span class="patient-stat-lbl">Latency</span>
+                    <span class="patient-stat-val">${avgLatency}</span>
+                </div>
+            </div>
+            
+            <div class="patient-meds-section">
+                <h4 style="font-size: 11px; font-weight:700; color:var(--txt-secondary); text-transform:uppercase; margin-bottom:8px; letter-spacing:0.5px;">Medication Schedule</h4>
+                <div class="patient-meds-list">
+                    ${medsListHtml}
+                </div>
+            </div>
+            
+            <div class="patient-card-actions">
+                <button class="btn btn-secondary btn-sm" onclick="triggerPatientSimCall('${escapeHtml(name)}')">
+                    <i data-lucide="phone"></i> Call Next Dose
+                </button>
+                <button class="btn btn-primary btn-sm btn-header" onclick="viewPatientInsights('${escapeHtml(name)}')">
+                    <i data-lucide="trending-up"></i> Insights
+                </button>
+            </div>
+        `;
+        
+        container.appendChild(card);
+    });
+    
+    // Dynamic Lucide rendering
+    if (window.lucide) {
+        lucide.createIcons();
+    }
+}
+
+function renderPatientsDashboardOnly() {
+    // Only re-render if the Patients tab is currently active
+    const patientsTab = document.getElementById("nav-patients");
+    if (patientsTab && patientsTab.classList.contains("active")) {
+        renderPatientsDashboard();
+    }
+}
+
+async function fetchPatientCognitiveData(patientName) {
+    try {
+        const response = await fetch(`/api/analytics/cognitive/${patientName}`);
+        const data = await response.json();
+        patientCognitiveStatus[patientName] = {
+            decline_flag: data.decline_flag,
+            trend: data.trend
+        };
+        renderPatientsDashboardOnly();
+    } catch (err) {
+        console.error("Error fetching patient cognitive data:", err);
+    }
+}
+
+function triggerPatientSimCall(patientName) {
+    const pReminders = cachedReminders.filter(r => r.patient.toLowerCase().trim() === patientName.toLowerCase().trim());
+    if (pReminders.length > 0) {
+        triggerSimulatedCall(pReminders[0].id);
+    } else {
+        triggerSimulatedCall("mock-test");
+    }
+}
+
+function viewPatientInsights(patientName) {
+    // Switch to clinical insights view and set name
+    const insightsTab = document.getElementById("nav-insights");
+    if (insightsTab) {
+        loadInsightsDataForPatient(patientName);
+        insightsTab.click();
+    }
+}
+
+function loadInsightsDataForPatient(patientName) {
+    currentInsightsPatient = patientName;
+    loadInsightsData();
+}
+
 
 
