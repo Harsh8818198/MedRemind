@@ -1108,3 +1108,157 @@ body {
     width: 100%;
     justify-content: center;
 }
+
+/* ==========================================================================
+   8. Clinical Insights & Phase 3 Premium Additions
+   ========================================================================== */
+
+/* Insights Tab Views Layout */
+.insights-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 1024px) {
+    .insights-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Red Glassmorphic Alert Banner */
+.insight-alert-banner {
+    box-shadow: 0 4px 30px rgba(244, 63, 94, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    animation: slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideDown {
+    0% { transform: translateY(-12px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+
+/* Adherence Heatmap 7x24 Calendar Styles */
+.heatmap-wrapper {
+    overflow-x: auto;
+    padding: 10px 0;
+    width: 100%;
+}
+
+.heatmap-grid {
+    display: grid;
+    grid-template-columns: 45px repeat(24, 1fr);
+    gap: 5px;
+    align-items: center;
+    min-width: 580px; /* Prevents squishing on small viewports */
+}
+
+.heatmap-day-label {
+    font-size: 11.5px;
+    color: var(--txt-secondary);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    height: 10.5px;
+    line-height: 10.5px;
+}
+
+.heatmap-cell {
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, box-shadow 0.2s ease;
+    outline: none;
+}
+
+.heatmap-cell:hover {
+    transform: scale(1.4);
+    z-index: 10;
+}
+
+/* Custom interactive outcome shadows for heatmap cells */
+.heatmap-cell.outcome-taken:hover { box-shadow: 0 0 12px var(--clr-green); }
+.heatmap-cell.outcome-earlier:hover { box-shadow: 0 0 12px var(--clr-blue); }
+.heatmap-cell.outcome-snooze:hover { box-shadow: 0 0 12px var(--clr-amber); }
+.heatmap-cell.outcome-refused:hover, .heatmap-cell.outcome-failed:hover { box-shadow: 0 0 12px var(--clr-red); }
+
+/* Pulse Indicator inside Table Risk Cells */
+.pulse-indicator {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    position: relative;
+    vertical-align: middle;
+}
+
+.pulse-indicator::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border-radius: 50%;
+    animation: statusPulse 2s infinite ease-in-out;
+    pointer-events: none;
+}
+
+.status-low { background-color: var(--clr-green); color: var(--clr-green); }
+.status-low::after { box-shadow: 0 0 6px var(--clr-green); }
+
+.status-medium { background-color: var(--clr-amber); color: var(--clr-amber); }
+.status-medium::after { box-shadow: 0 0 6px var(--clr-amber); }
+
+.status-high { background-color: var(--clr-red); color: var(--clr-red); }
+.status-high::after { box-shadow: 0 0 6px var(--clr-red); }
+
+@keyframes statusPulse {
+    0% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(2.4); opacity: 0; }
+    100% { transform: scale(1); opacity: 0; }
+}
+
+/* Escalation History Timeline Feed */
+.escalation-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+.timeline-empty {
+    text-align: center;
+    color: var(--txt-muted);
+    font-size: 13.5px;
+    padding: 40px 0;
+    font-weight: 500;
+}
+
+.timeline-node {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-glass);
+    border-radius: 12px;
+    padding: 16px 20px;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.timeline-node:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.12);
+    transform: translateX(3px);
+}
+
+/* Amber DDI Form Warning Banner */
+.drug-warning-banner {
+    box-shadow: 0 4px 24px rgba(245, 158, 11, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    animation: slideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideIn {
+    0% { transform: scale(0.96) translateY(6px); opacity: 0; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+}

@@ -37,6 +37,9 @@
                 <a href="#" class="nav-item active" id="nav-dashboard" aria-current="page">
                     <i data-lucide="layout-dashboard"></i> Dashboard
                 </a>
+                <a href="#" class="nav-item" id="nav-insights">
+                    <i data-lucide="brain-circuit"></i> Insights
+                </a>
                 <a href="#" class="nav-item" id="nav-reminders">
                     <i data-lucide="calendar-clock"></i> Schedule
                 </a>
@@ -148,6 +151,7 @@
                                             <th>Dosage</th>
                                             <th>Scheduled Time</th>
                                             <th>Next Run</th>
+                                            <th>Adherence Risk</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -177,6 +181,68 @@
                             </div>
                         </div>
                     </section>
+                </div>
+            </div>
+
+            <!-- ==========================================
+                 VIEW 1.5: CLINICAL INSIGHTS SPA VIEW
+                 ========================================== -->
+            <div class="tab-view" id="view-insights" style="display: none;">
+                <!-- Insights Alert Warning banner -->
+                <div class="insight-alert-banner" id="cognitive-decline-banner" style="display: none; margin-bottom: 24px; padding: 18px; border-radius: 12px; background: rgba(244, 63, 94, 0.12); border: 1px solid var(--clr-red); display: flex; align-items: flex-start; gap: 15px;">
+                    <i data-lucide="shield-alert" style="color: var(--clr-red); flex-shrink: 0; width: 24px; height: 24px;"></i>
+                    <div>
+                        <h3 style="color: var(--txt-primary); font-weight: 700; font-size: 15px; margin-bottom: 4px;">Potential Cognitive Health Decline Flagged!</h3>
+                        <p style="font-size: 13px; color: var(--txt-secondary); line-height: 1.5;">This patient's conversation coherence score has dropped by over 20% in recent call history. Please review call transcripts and coordinate clinical follow-up immediately.</p>
+                    </div>
+                </div>
+
+                <!-- Insights Core Grid -->
+                <div class="insights-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+                    <!-- Left: Cognitive Trend Canvas Card -->
+                    <div class="section-card">
+                        <div class="card-header">
+                            <div class="title-with-desc">
+                                <h2>Cognitive Performance Trends</h2>
+                                <p class="card-desc">30-day tracking of conversational coherence (%) and response latencies (s)</p>
+                            </div>
+                        </div>
+                        <div class="trend-chart-container" style="height: 250px; position: relative; margin-top: 15px; padding: 10px;">
+                            <canvas id="cognitiveTrendChart" style="width: 100%; height: 100%;"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Right: Adherence Heatmap 7x24 Grid -->
+                    <div class="section-card">
+                        <div class="card-header">
+                            <div class="title-with-desc">
+                                <h2>Adherence Heatmap Calendar</h2>
+                                <p class="card-desc">7x24 hourly adherence calendars showing overall call outcomes pattern</p>
+                            </div>
+                        </div>
+                        <div class="heatmap-wrapper" style="margin-top: 20px;">
+                            <div class="heatmap-grid" id="adherence-heatmap-grid">
+                                <!-- Populated Dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Escalation Alerts Timeline -->
+                <div class="section-card" style="margin-bottom: 24px;">
+                    <div class="card-header">
+                        <div class="title-with-desc">
+                            <h2>Critical Alerts Escalation Timeline</h2>
+                            <p class="card-desc">Historical timeline logs of Twilio SMS/WhatsApp messages dispatched to caregivers</p>
+                        </div>
+                        <button class="btn btn-secondary btn-sm" id="btn-test-escalation-modal-open">
+                            <i data-lucide="bell-ring"></i> Send Test SMS Alert
+                        </button>
+                    </div>
+                    
+                    <div class="escalation-timeline" id="escalation-timeline-container" style="margin-top: 20px;">
+                        <div class="timeline-empty">No escalation logs recorded yet.</div>
+                    </div>
                 </div>
             </div>
 
@@ -212,6 +278,7 @@
                                     <th>Dosage</th>
                                     <th>Scheduled Time</th>
                                     <th>Next Run</th>
+                                    <th>Adherence Risk</th>
                                     <th>Monitoring Status</th>
                                     <th>Actions</th>
                                 </tr>
@@ -284,6 +351,15 @@
             <div class="modal-header">
                 <h2>Schedule Medication</h2>
                 <button class="btn-close" id="btn-close-add-modal" aria-label="Close add reminder modal"><i data-lucide="x"></i></button>
+            </div>
+            
+            <!-- DDI Warning Banner inside Add Reminder form -->
+            <div class="drug-warning-banner" id="ddi-form-warning" style="display: none; margin: 15px 24px; padding: 15px; border-radius: 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid var(--clr-amber); align-items: flex-start; gap: 12px;">
+                <i data-lucide="shield-alert" style="color: var(--clr-amber); flex-shrink: 0; width:20px; height:20px; margin-top: 2px;"></i>
+                <div>
+                    <h4 style="color: var(--clr-amber); font-weight: 700; font-size: 14px; margin-bottom: 4px;">Drug Conflict Warning!</h4>
+                    <p id="ddi-form-warning-text" style="font-size: 12px; color: var(--txt-secondary); line-height: 1.4;"></p>
+                </div>
             </div>
             
             <form id="add-reminder-form" class="form-container">
@@ -386,6 +462,46 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Trigger Test Escalation Modal Overlay -->
+    <div class="modal-overlay" id="test-escalation-modal">
+        <div class="modal-card" style="max-width: 450px;">
+            <div class="modal-header">
+                <h2>Trigger Test Escalation</h2>
+                <button class="btn-close" id="btn-close-test-escalation" aria-label="Close test modal"><i data-lucide="x"></i></button>
+            </div>
+            
+            <form id="test-escalation-form" class="form-container">
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label for="test-patient" style="display:block; font-size:12px; font-weight:600; margin-bottom:6px; color:var(--txt-secondary);">Patient Name</label>
+                    <input type="text" id="test-patient" value="Grandpa" required style="width:100%; background: #111827; border: 1px solid var(--border-glass); color: var(--txt-primary); padding: 12px; border-radius: 10px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label for="test-med" style="display:block; font-size:12px; font-weight:600; margin-bottom:6px; color:var(--txt-secondary);">Medication Name</label>
+                    <input type="text" id="test-med" value="Lisinopril" required style="width:100%; background: #111827; border: 1px solid var(--border-glass); color: var(--txt-primary); padding: 12px; border-radius: 10px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label for="test-outcome" style="display:block; font-size:12px; font-weight:600; margin-bottom:6px; color:var(--txt-secondary);">Trigger Tier / Outcome</label>
+                    <select id="test-outcome" style="width:100%; background: #111827; border: 1px solid var(--border-glass); color: var(--txt-primary); padding: 12px; border-radius: 10px; font-weight: 600;">
+                        <option value="NO_RESPONSE">Tier 1: Initial Silence (Retry scheduled)</option>
+                        <option value="REFUSED">Tier 3: Patient Refused Dose (SMS alert)</option>
+                        <option value="CONFUSED">Tier 3: Patient Disoriented/Confused (SMS alert)</option>
+                        <option value="MEDICAL_CONCERN">Tier 3: Complaint of Illness (SMS alert)</option>
+                        <option value="NO_RESPONSE_FAILED">Tier 3: Call Failed After 3 attempts (SMS alert)</option>
+                        <option value="MEDICAL_EMERGENCY">Tier 4: CRITICAL HEALTH EMERGENCY (Immediate dual-SMS)</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label for="test-note" style="display:block; font-size:12px; font-weight:600; margin-bottom:6px; color:var(--txt-secondary);">Symptom Note / Reason</label>
+                    <input type="text" id="test-note" value="Patient complains of chest pressure." required style="width:100%; background: #111827; border: 1px solid var(--border-glass); color: var(--txt-primary); padding: 12px; border-radius: 10px;">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-test-escalation">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Dispatch Alert</button>
+                </div>
+            </form>
         </div>
     </div>
 

@@ -25,3 +25,9 @@ env/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# SQLite databases & runtime backups
+data/*.db
+data/*.bak
+data/temp_*.wav
+data/temp_whisper.wav

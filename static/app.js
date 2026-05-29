@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Initialize Dashboard UI Elements
     initModalControls();
     initTabSwitcher();
+    initEscalationModal();
     loadDashboardData();
     
     // Quick Test Call listener
@@ -29,6 +30,8 @@ let cachedLogs = [];
 function loadDashboardData() {
     loadReminders();
     loadLogs();
+    loadRiskScores();
+    loadInsightsData();
 }
 
 async function loadReminders() {
@@ -314,6 +317,8 @@ function initModalControls() {
     const close = () => {
         addModal.classList.remove("active");
         form.reset();
+        const warningBanner = document.getElementById("ddi-form-warning");
+        if (warningBanner) warningBanner.style.display = "none";
     };
 
     if (openBtn) openBtn.addEventListener("click", open);
@@ -340,6 +345,25 @@ function initModalControls() {
             const res = await response.json();
             
             if (res.status === "success") {
+                const safety = res.safety || { safe: true, warnings: [] };
+                
+                if (!safety.safe) {
+                    const warningBanner = document.getElementById("ddi-form-warning");
+                    const warningText = document.getElementById("ddi-form-warning-text");
+                    
+                    if (warningBanner && warningText) {
+                        warningText.innerText = safety.warnings.map(w => `${w.drug_a} + ${w.drug_b}: ${w.warning}`).join("\n");
+                        warningBanner.style.display = "flex";
+                        
+                        const confirmAdd = confirm("Drug Conflict Warning!\n" + safety.warnings.map(w => w.warning).join("\n") + "\n\nAre you sure you want to schedule this medication?");
+                        if (!confirmAdd) {
+                            // Rollback added reminder
+                            await fetch(`/api/reminders/${res.reminder.id}`, { method: "DELETE" });
+                            return;
+                        }
+                    }
+                }
+                
                 close();
                 loadDashboardData();
             } else {
@@ -624,6 +648,7 @@ async function finishCallSimulation() {
 function initTabSwitcher() {
     const tabs = [
         { id: "nav-dashboard", viewId: "view-dashboard", title: "Care Portal", subtitle: "Real-time medication adherence & proactive patient diagnostics" },
+        { id: "nav-insights", viewId: "view-insights", title: "Clinical Insights", subtitle: "Machine learning risk forecasts, cognitive trends, and emergency escalations" },
         { id: "nav-reminders", viewId: "view-schedule", title: "Medication Scheduler", subtitle: "Manage active schedules, patient details, and background reminder alerts" },
         { id: "nav-activity", viewId: "view-activity", title: "Audit Log Database", subtitle: "Review call outcomes, detailed transcripts, and historical adherence tracking" }
     ];
@@ -775,3 +800,411 @@ window.sendSimText = sendSimText;
 window.toggleLogDetails = toggleLogDetails;
 window.filterScheduleTable = filterScheduleTable;
 window.filterLogsTable = filterLogsTable;
+
+// --------------------------------------------------------------------------
+// 7. Clinical Analytics & Heatmap Render Engines
+// --------------------------------------------------------------------------
+
+let cachedRiskScores = {};
+
+async function loadRiskScores() {
+    try {
+        const response = await fetch("/api/analytics/risk");
+        const risks = await response.json();
+        cachedRiskScores = risks;
+        
+        updateTableRiskBadges();
+    } catch (err) {
+        console.error("Error loading risk scores:", err);
+    }
+}
+
+function updateTableRiskBadges() {
+    // Inject into active reminders table
+    const dashboardRows = document.querySelectorAll("#reminders-tbody tr");
+    dashboardRows.forEach(row => {
+        const deleteBtn = row.querySelector("button[onclick^='deleteReminder']");
+        if (deleteBtn) {
+            const onclickText = deleteBtn.getAttribute("onclick");
+            const match = onclickText.match(/'([^']+)'/);
+            if (match && match[1]) {
+                const rId = match[1];
+                const riskInfo = cachedRiskScores[rId] || { risk_score: 0.15, level: "Low" };
+                injectRiskBadge(row, riskInfo, 5); // Insert at index 5 before actions column
+            }
+        }
+    });
+
+    // Inject into scheduler board table
+    const boardRows = document.querySelectorAll("#schedule-board-tbody tr");
+    boardRows.forEach(row => {
+        const deleteBtn = row.querySelector("button[onclick^='deleteReminder']");
+        if (deleteBtn) {
+            const onclickText = deleteBtn.getAttribute("onclick");
+            const match = onclickText.match(/'([^']+)'/);
+            if (match && match[1]) {
+                const rId = match[1];
+                const riskInfo = cachedRiskScores[rId] || { risk_score: 0.15, level: "Low" };
+                injectRiskBadge(row, riskInfo, 5); // Insert at index 5 before active column
+            }
+        }
+    });
+}
+
+function injectRiskBadge(row, riskInfo, insertIndex) {
+    let riskCell = row.querySelector(".risk-td");
+    if (!riskCell) {
+        riskCell = document.createElement("td");
+        riskCell.className = "risk-td";
+        const refNode = row.children[insertIndex];
+        row.insertBefore(riskCell, refNode);
+    }
+    
+    const risk = riskInfo.risk_score;
+    const level = riskInfo.level;
+    let badgeClass = "outcome-taken";
+    if (level === "High") badgeClass = "outcome-refused";
+    else if (level === "Medium") badgeClass = "outcome-concern";
+    
+    riskCell.innerHTML = `
+        <span class="badge-outcome ${badgeClass}" style="display:inline-flex; align-items:center; gap:6px; font-weight:700; font-size:11.5px; border:1px solid rgba(255,255,255,0.05); padding: 4px 10px;">
+            <span class="pulse-indicator status-${level.toLowerCase()}" style="width:7px; height:7px; border-radius:50%; display:inline-block; box-shadow:0 0 8px currentColor;"></span>
+            ${level} (${Math.round(risk * 100)}%)
+        </span>
+    `;
+}
+
+async function loadInsightsData() {
+    const patientName = "Grandpa"; // Default monitoring patient
+    
+    try {
+        const response = await fetch(`/api/analytics/cognitive/${patientName}`);
+        const data = await response.json();
+        
+        // Show/hide decline alert card
+        const declineBanner = document.getElementById("cognitive-decline-banner");
+        if (declineBanner) {
+            declineBanner.style.display = data.decline_flag ? "flex" : "none";
+        }
+        
+        renderCognitiveTrendChart(data.trend);
+        renderAdherenceHeatmap(data.trend);
+        loadEscalationTimeline();
+        
+    } catch (err) {
+        console.error("Error loading clinical insights:", err);
+    }
+}
+
+function renderCognitiveTrendChart(trend) {
+    const canvas = document.getElementById("cognitiveTrendChart");
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext("2d");
+    const rect = canvas.getBoundingClientRect();
+    
+    // Auto-adjust relative pixel display for clean lines
+    canvas.width = rect.width * window.devicePixelRatio;
+    canvas.height = rect.height * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    
+    const width = rect.width;
+    const height = rect.height;
+    
+    ctx.clearRect(0, 0, width, height);
+    
+    const scores = trend.coherence_scores || [];
+    const latencies = trend.response_latencies || [];
+    const labels = trend.timestamps || [];
+    const count = scores.length;
+    
+    if (count === 0) {
+        ctx.fillStyle = "#9CA3AF";
+        ctx.font = "13px 'Plus Jakarta Sans'";
+        ctx.textAlign = "center";
+        ctx.fillText("No cognitive trend logs available.", width / 2, height / 2);
+        return;
+    }
+    
+    const paddingLeft = 45;
+    const paddingRight = 45;
+    const paddingTop = 20;
+    const paddingBottom = 30;
+    
+    const chartW = width - paddingLeft - paddingRight;
+    const chartH = height - paddingTop - paddingBottom;
+    
+    // Draw Grid Lines (Horizontal)
+    const gridRows = 4;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= gridRows; i++) {
+        const y = paddingTop + (chartH / gridRows) * i;
+        ctx.beginPath();
+        ctx.moveTo(paddingLeft, y);
+        ctx.lineTo(width - paddingRight, y);
+        ctx.stroke();
+    }
+    
+    const getX = (index) => {
+        if (count === 1) return paddingLeft + chartW / 2;
+        return paddingLeft + (chartW / (count - 1)) * index;
+    };
+    
+    const getYCoherence = (val) => {
+        return paddingTop + chartH - (chartH * val);
+    };
+    
+    const getYLatency = (val) => {
+        const maxLatency = 15.0;
+        const normalized = Math.min(val, maxLatency) / maxLatency;
+        return paddingTop + chartH - (chartH * normalized);
+    };
+    
+    // 1. Draw Coherence Line (Indigo Accent)
+    ctx.strokeStyle = "#6366F1";
+    ctx.lineWidth = 3.5;
+    ctx.lineJoin = "round";
+    ctx.shadowColor = "rgba(99, 102, 241, 0.3)";
+    ctx.shadowBlur = 6;
+    
+    ctx.beginPath();
+    scores.forEach((s, idx) => {
+        const x = getX(idx);
+        const y = getYCoherence(s);
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    
+    ctx.shadowBlur = 0; // Reset shadow
+    
+    scores.forEach((s, idx) => {
+        ctx.fillStyle = "#6366F1";
+        ctx.beginPath();
+        ctx.arc(getX(idx), getYCoherence(s), 4.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#FFFFFF";
+        ctx.beginPath();
+        ctx.arc(getX(idx), getYCoherence(s), 2, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
+    // 2. Draw Latency Line (Amber Accent)
+    ctx.strokeStyle = "#F59E0B";
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = "round";
+    ctx.shadowColor = "rgba(245, 158, 11, 0.2)";
+    ctx.shadowBlur = 5;
+    
+    ctx.beginPath();
+    latencies.forEach((l, idx) => {
+        const x = getX(idx);
+        const y = getYLatency(l);
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    
+    ctx.shadowBlur = 0; // Reset shadow
+    
+    latencies.forEach((l, idx) => {
+        ctx.fillStyle = "#F59E0B";
+        ctx.beginPath();
+        ctx.arc(getX(idx), getYLatency(l), 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#FFFFFF";
+        ctx.beginPath();
+        ctx.arc(getX(idx), getYLatency(l), 1.5, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
+    // 3. Draw Axis Labels
+    ctx.fillStyle = "#9CA3AF";
+    ctx.font = "9px 'Plus Jakarta Sans'";
+    
+    // Y-Axis labels Left (Coherence)
+    ctx.textAlign = "right";
+    ctx.fillText("100%", paddingLeft - 8, getYCoherence(1.0) + 3);
+    ctx.fillText("50%", paddingLeft - 8, getYCoherence(0.5) + 3);
+    ctx.fillText("0%", paddingLeft - 8, getYCoherence(0.0) + 3);
+    
+    // Y-Axis labels Right (Latency)
+    ctx.textAlign = "left";
+    ctx.fillText("0s", width - paddingRight + 8, getYLatency(0.0) + 3);
+    ctx.fillText("7s", width - paddingRight + 8, getYLatency(7.5) + 3);
+    ctx.fillText("15s", width - paddingRight + 8, getYLatency(15.0) + 3);
+    
+    // X-Axis labels
+    ctx.textAlign = "center";
+    const skip = Math.max(1, Math.floor(count / 5));
+    labels.forEach((l, idx) => {
+        if (idx % skip === 0) {
+            ctx.fillText(l.split(" ")[0], getX(idx), height - paddingBottom + 16);
+        }
+    });
+}
+
+function renderAdherenceHeatmap(trend) {
+    const grid = document.getElementById("adherence-heatmap-grid");
+    if (!grid) return;
+    
+    grid.innerHTML = "";
+    
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const outcomes = trend.outcomes || [];
+    const timestamps = trend.timestamps || [];
+    
+    // Create 7x24 grid (Day indices 0-6 vs Hours 0-23)
+    const matrix = Array(7).fill(null).map(() => Array(24).fill(null));
+    
+    timestamps.forEach((ts, idx) => {
+        try {
+            const parts = ts.split(" ");
+            const dateParts = parts[0].split("-");
+            const timeParts = parts[1].split(":");
+            
+            const date = new Date(new Date().getFullYear(), parseInt(dateParts[0]) - 1, parseInt(dateParts[1]), parseInt(timeParts[0]));
+            matrix[date.getDay()][date.getHours()] = outcomes[idx];
+        } catch (e) {
+            // Safe random distribution to visual presentation during offline/mock state
+            const seedDay = (idx * 3) % 7;
+            const seedHour = (idx * 7 + 9) % 24;
+            matrix[seedDay][seedHour] = outcomes[idx];
+        }
+    });
+    
+    // Redraw grid elements
+    for (let day = 0; day < 7; day++) {
+        const dayLabel = document.createElement("div");
+        dayLabel.className = "heatmap-day-label";
+        dayLabel.innerText = days[day];
+        dayLabel.style.fontSize = "11.5px";
+        dayLabel.style.color = "var(--txt-secondary)";
+        dayLabel.style.fontWeight = "600";
+        grid.appendChild(dayLabel);
+        
+        for (let hour = 0; hour < 24; hour++) {
+            const cell = document.createElement("div");
+            const outcome = matrix[day][hour];
+            
+            cell.className = "heatmap-cell";
+            cell.style.width = "10.5px";
+            cell.style.height = "10.5px";
+            cell.style.borderRadius = "2.5px";
+            cell.style.background = "rgba(255, 255, 255, 0.04)";
+            
+            if (outcome) {
+                const badgeClass = getOutcomeBadgeClass(outcome);
+                cell.classList.add(badgeClass);
+                cell.title = `${days[day]} ${hour}:00 - ${outcome.replace("_", " ")}`;
+                
+                // Color override map based on badge outcomes
+                if (badgeClass === "outcome-taken") cell.style.background = "var(--clr-green)";
+                else if (badgeClass === "outcome-earlier") cell.style.background = "var(--clr-blue)";
+                else if (badgeClass === "outcome-snooze") cell.style.background = "var(--clr-amber)";
+                else if (badgeClass === "outcome-refused" || badgeClass === "outcome-failed") cell.style.background = "var(--clr-red)";
+                else cell.style.background = "var(--clr-purple)";
+            } else {
+                cell.title = `No activity logged at ${days[day]} ${hour}:00`;
+            }
+            grid.appendChild(cell);
+        }
+    }
+}
+
+async function loadEscalationTimeline() {
+    const container = document.getElementById("escalation-timeline-container");
+    if (!container) return;
+    
+    try {
+        const response = await fetch("/api/escalation/history");
+        const escalations = await response.json();
+        
+        if (escalations.length === 0) {
+            container.innerHTML = `<div class="timeline-empty">No critical alert escalation events logged.</div>`;
+            return;
+        }
+        
+        container.innerHTML = "";
+        escalations.forEach(ev => {
+            const timeStr = ev.timestamp ? ev.timestamp.replace("T", " ").substring(0, 16) : "Date N/A";
+            const node = document.createElement("div");
+            node.className = "timeline-node";
+            node.style.display = "flex";
+            node.style.gap = "15px";
+            node.style.marginBottom = "15px";
+            node.style.paddingLeft = "10px";
+            node.style.borderLeft = "2.5px solid var(--clr-amber)";
+            
+            let colorClass = "outcome-snooze";
+            if (ev.tier === 4) {
+                node.style.borderLeftColor = "var(--clr-red)";
+                colorClass = "outcome-refused";
+            }
+            
+            node.innerHTML = `
+                <div style="flex-shrink:0; font-size:11.5px; color:var(--txt-muted); min-width:85px;">${timeStr}</div>
+                <div>
+                    <span class="badge-outcome ${colorClass}" style="font-size:10px; padding:2px 6px;">Tier ${ev.tier} Alert</span>
+                    <h4 style="font-size:13.5px; font-weight:700; color:var(--txt-primary); margin: 4px 0;">Alert for ${escapeHtml(ev.patient)} (${escapeHtml(ev.medication)})</h4>
+                    <p style="font-size:12.5px; color:var(--txt-secondary); line-height:1.4;">${escapeHtml(ev.guardian_note)}</p>
+                </div>
+            `;
+            container.appendChild(node);
+        });
+        
+    } catch (err) {
+        console.error("Error loading timeline history:", err);
+    }
+}
+
+function initEscalationModal() {
+    const modal = document.getElementById("test-escalation-modal");
+    const openBtn = document.getElementById("btn-test-escalation-modal-open");
+    const closeBtn = document.getElementById("btn-close-test-escalation");
+    const cancelBtn = document.getElementById("btn-cancel-test-escalation");
+    const form = document.getElementById("test-escalation-form");
+    
+    if (!modal) return;
+    
+    const open = () => modal.classList.add("active");
+    const close = () => {
+        modal.classList.remove("active");
+        form.reset();
+    };
+    
+    if (openBtn) openBtn.onclick = open;
+    if (closeBtn) closeBtn.onclick = close;
+    if (cancelBtn) cancelBtn.onclick = close;
+    
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        
+        const payload = {
+            patient: document.getElementById("test-patient").value.trim(),
+            medication: document.getElementById("test-med").value.trim(),
+            outcome: document.getElementById("test-outcome").value,
+            custom_note: document.getElementById("test-note").value.trim()
+        };
+        
+        try {
+            const response = await fetch("/api/escalation/test", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const res = await response.json();
+            
+            if (res.status === "success") {
+                close();
+                loadInsightsData();
+            } else {
+                alert(`Error: ${res.message}`);
+            }
+        } catch (err) {
+            console.error("Error triggering test alert:", err);
+        }
+    });
+}
+

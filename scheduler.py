@@ -64,6 +64,7 @@ def run_reminder_call(reminder: dict, is_test: bool = False):
     guardian_note = "Call initiated but patient did not respond."
     turns = 0
     max_turns = 5
+    consecutive_confused = 0
     
     # Run interactive multi-turn call
     while not end_call and turns < max_turns:
@@ -84,8 +85,14 @@ def run_reminder_call(reminder: dict, is_test: bool = False):
         end_call = res.get("end_call", False)
         guardian_note = res.get("guardian_note", "")
         
-        # Speak back the agent's reply
-        voice.speak(speech)
+        # Track consecutive confused or silent turns
+        if outcome in ["CONFUSED", "NO_RESPONSE"] or not patient_reply:
+            consecutive_confused += 1
+        else:
+            consecutive_confused = 0
+            
+        # Speak back the agent's reply with adaptive speech pacing
+        voice.speak(speech, consecutive_confused=consecutive_confused)
         
         # Handle silence or continuous retry logic
         if outcome == "NO_RESPONSE" and not patient_reply:

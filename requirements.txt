@@ -1,7 +1,15 @@
-requests
-python-dotenv
-pyttsx3
-SpeechRecognition
-flask
-# Note: For voice input, you may also install PyAudio:
-# pip install pyaudio
+# Core web services and environments
+flask>=3.0.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# Text-to-Speech and Speech Recognition (VOICE_MODE=voice)
+pyttsx3>=2.90
+SpeechRecognition>=3.10.0
+
+# Clinical Analytics & Machine Learning
+numpy>=1.24.0
+scikit-learn>=1.2.0
+
+# Optional Caregiver Emergency Escalation Services
+twilio>=8.0.0

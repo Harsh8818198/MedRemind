@@ -157,8 +157,13 @@ class AdherencePredictor:
             
         # Last run stats
         last_log = history[-1] if history else {}
-        last_latency = last_log.get("response_latency_sec", 4.0)
-        last_coherence = last_log.get("coherence_score", 0.85)
+        last_latency = last_log.get("response_latency_sec")
+        if last_latency is None:
+            last_latency = 4.0
+            
+        last_coherence = last_log.get("coherence_score")
+        if last_coherence is None:
+            last_coherence = 0.85
         
         # Fallback Heuristic Risk Calculation (if model not trained)
         if not self.is_trained or self.model is None:

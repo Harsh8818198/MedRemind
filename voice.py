@@ -1,10 +1,16 @@
 import os
 import sys
+import re
+import time
 from dotenv import load_dotenv
 
 # Load env configurations
 load_dotenv()
 VOICE_MODE = os.getenv("VOICE_MODE", "text").strip().lower()
+VOICE_STT_ENGINE = os.getenv("VOICE_STT_ENGINE", "google").strip().lower()
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
 
 # Advanced fallbacks for pyttsx3 and speech_recognition
 TTS_AVAILABLE = False
@@ -46,27 +52,118 @@ if VOICE_MODE == "voice":
         print("[Voice System Alert] speech_recognition (SpeechRecognition) not installed.")
         print("Running in Text-Only input fallback mode.\n")
 
-def speak(text: str):
-    """Speak text using TTS if available; always print to the screen in a beautiful format."""
+# Check if local Whisper STT is requested
+WHISPER_AVAILABLE = False
+whisper_model = None
+if VOICE_MODE == "voice" and VOICE_STT_ENGINE == "whisper":
+    try:
+        import whisper
+        WHISPER_AVAILABLE = True
+    except ImportError:
+        print("[Voice System Alert] whisper package not installed. Falling back to Google Web STT.\n")
+
+def speak(text: str, consecutive_confused: int = 0):
+    """
+    Speak text using TTS if available. Always print to console.
+    Adaptive Speech Pacing: If consecutive_confused >= 2, automatically decreases 
+    TTS rate to 100 WPM and adds 1.5s pauses between sentences.
+    """
     # Print styled terminal output
     print(f"\n[Agent]: {text}")
     sys.stdout.flush()
     
     if VOICE_MODE == "voice" and TTS_AVAILABLE and tts_engine:
         try:
-            # We run in a separate try-except block so TTS failures don't halt execution
-            tts_engine.say(text)
-            tts_engine.runAndWait()
-        except Exception as tts_err:
-            # Print error but continue running program
+            # Set speaking rate dynamically
+            rate = 100 if consecutive_confused >= 2 else 125
+            tts_engine.setProperty("rate", rate)
+            
+            if consecutive_confused >= 2:
+                # Slower paced speech with sentence pauses
+                sentences = re.split(r'(?<=[.!?])\s+', text)
+                for sentence in sentences:
+                    if sentence.strip():
+                        tts_engine.say(sentence.strip())
+                        tts_engine.runAndWait()
+                        time.sleep(1.5) # 1.5s breathing pause
+            else:
+                # Normal speaking mode
+                tts_engine.say(text)
+                tts_engine.runAndWait()
+        except Exception:
             pass
+
+def analyze_audio_features(audio_data: bytes) -> dict:
+    """
+    Extracts basic pitch variance and speech rate from the audio buffer using numpy FFT.
+    Flags extreme values (vocal tremors or severe slowness) as potential health alerts.
+    """
+    import numpy as np
+    if not audio_data or len(audio_data) == 0:
+        return {
+            "pitch_variance": 0.0,
+            "speech_rate_wpm": 0.0,
+            "status": "normal",
+            "health_alert": False
+        }
+        
+    try:
+        # Convert raw audio bytes into 16-bit integers
+        samples = np.frombuffer(audio_data, dtype=np.int16)
+        if len(samples) == 0:
+            return {"pitch_variance": 0.0, "speech_rate_wpm": 0.0, "status": "normal", "health_alert": False}
+            
+        # Compute Fast Fourier Transform
+        fft_val = np.abs(np.fft.rfft(samples))
+        frequencies = np.fft.rfftfreq(len(samples), d=1.0/16000.0) # Assume 16kHz sampling
+        
+        # Filter frequency spectrum for standard vocal range (85Hz - 255Hz)
+        vocal_mask = (frequencies >= 85) & (frequencies <= 255)
+        vocal_freqs = frequencies[vocal_mask]
+        vocal_fft = fft_val[vocal_mask]
+        
+        if len(vocal_fft) > 0 and np.sum(vocal_fft) > 0:
+            mean_pitch = np.average(vocal_freqs, weights=vocal_fft)
+            pitch_variance = np.sqrt(np.average((vocal_freqs - mean_pitch)**2, weights=vocal_fft))
+        else:
+            pitch_variance = 12.0 # Normal fallback
+            
+        # Calculate Zero Crossing crossings for basic speech rate proxy
+        zero_crossings = np.nonzero(np.diff(samples > 0))[0]
+        crossing_rate = len(zero_crossings) / (len(samples) / 16000.0) if len(samples) > 0 else 0.0
+        speech_rate_wpm = round(crossing_rate * 0.12)
+        
+        # Clinical indicator flags
+        status = "normal"
+        health_alert = False
+        
+        if pitch_variance > 40.0 or pitch_variance < 2.5:
+            status = "abnormal_pitch_tremor_instability"
+            health_alert = True
+        elif speech_rate_wpm < 45:
+            status = "extreme_slowness_lethargy"
+            health_alert = True
+            
+        return {
+            "pitch_variance": round(float(pitch_variance), 2),
+            "speech_rate_wpm": int(speech_rate_wpm),
+            "status": status,
+            "health_alert": health_alert
+        }
+    except Exception as e:
+        return {
+            "pitch_variance": 10.0,
+            "speech_rate_wpm": 110,
+            "status": "normal_fallback",
+            "health_alert": False,
+            "error": str(e)
+        }
 
 def listen(timeout_sec: int = 6, reminder: dict = None, last_agent_speech: str = "") -> str:
     """
-    Listen to speech from the mic and return transcription.
-    Falls back to terminal text input if VOICE_MODE is 'text', 
-    if STT is unavailable, or if microphone initialization fails.
-    If run in a background thread, automatically simulates a realistic patient response to prevent blocking.
+    Listen to speech from the microphone and return transcription.
+    Local STT Whisper: If VOICE_STT_ENGINE env var is set to 'whisper', transcribes locally.
+    Vocal Biomarkers: Analyzes frame data using numpy FFT in background.
     """
     import threading
     is_background = (threading.current_thread() != threading.main_thread())
@@ -88,26 +185,54 @@ def listen(timeout_sec: int = 6, reminder: dict = None, last_agent_speech: str =
     import speech_recognition as sr
     recognizer = sr.Recognizer()
     
-    # Adjust for ambient noise and listen
     try:
         with sr.Microphone() as source:
             print("\n[Listening... Speak now]")
             sys.stdout.flush()
             
-            # Adjust for 1 second of noise to calibrate thresholds
             recognizer.adjust_for_ambient_noise(source, duration=1.0)
-            
-            # Record audio
             audio = recognizer.listen(source, timeout=timeout_sec, phrase_time_limit=10)
             
         print("[Processing speech...]")
         sys.stdout.flush()
         
-        # Transcribe using Google Web Speech API (free and requires no API key)
-        phrase = recognizer.recognize_google(audio)
-        print(f"[Patient Voice]: {phrase}")
-        return phrase
+        # 1. Extract and analyze Vocal Biomarker features from raw frame data
+        features = analyze_audio_features(audio.frame_data)
+        if features["health_alert"]:
+            print(f"[Vocal Biomarker Warning] Status: {features['status'].replace('_', ' ')} (Pitch Variance: {features['pitch_variance']}, Speech Rate: {features['speech_rate_wpm']} WPM)")
         
+        # 2. Transcribe voice using the configured STT engine
+        if VOICE_STT_ENGINE == "whisper" and WHISPER_AVAILABLE:
+            global whisper_model
+            
+            # Save raw audio buffer into WAV file to be read by Whisper model
+            wav_data = audio.get_wav_data()
+            os.makedirs(DATA_DIR, exist_ok=True)
+            temp_path = os.path.join(DATA_DIR, "temp_whisper.wav")
+            with open(temp_path, "wb") as f:
+                f.write(wav_data)
+                
+            if whisper_model is None:
+                print("[Whisper Engine] Loading local 'base' model... (Please wait)")
+                sys.stdout.flush()
+                whisper_model = whisper.load_model("base")
+                
+            result = whisper_model.transcribe(temp_path)
+            phrase = result.get("text", "").strip()
+            
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+                
+            print(f"[Patient Voice (Whisper Local)]: {phrase}")
+            return phrase
+        else:
+            # Fallback/Default: Google Web Speech API
+            phrase = recognizer.recognize_google(audio)
+            print(f"[Patient Voice]: {phrase}")
+            return phrase
+            
     except sr.WaitTimeoutError:
         print("[Silence detected]")
         return ""
