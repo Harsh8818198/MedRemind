@@ -189,10 +189,15 @@ def process_simulation_turn():
         
     session = active_sessions[session_id]
     agent = session["agent"]
+    last_act = session.get("last_activity")
+    if last_act:
+        latency_sec = round((datetime.datetime.now() - last_act).total_seconds(), 1)
+    else:
+        latency_sec = 3.5
     session["last_activity"] = datetime.datetime.now()
     
     # Process turn with Gemini LLM (or rules engine fallback if no key)
-    res = agent.process_turn(reply)
+    res = agent.process_turn(reply, latency_sec)
     session["turns"] += 1
     
     # Force end if turn cap is reached
@@ -283,6 +288,32 @@ def end_simulation():
                 outcome = "NO_RESPONSE_FAILED"
                 guardian_note = f"Call failed. No response from patient after {retry_limit} attempts."
             
+    # Calculate average response latency and coherence score across all turns
+    import json
+    latencies = []
+    coherences = []
+    for h in agent.history:
+        if h.get("role") == "assistant":
+            try:
+                data = json.loads(h.get("content", "{}"))
+                if "response_latency_sec" in data:
+                    latencies.append(data["response_latency_sec"])
+                if "coherence_score" in data:
+                    coherences.append(data["coherence_score"])
+            except Exception:
+                pass
+    avg_latency = sum(latencies) / len(latencies) if latencies else None
+    avg_coherence = sum(coherences) / len(coherences) if coherences else None
+
+    # Predict adherence risk score
+    try:
+        from analytics import AdherencePredictor
+        predictor = AdherencePredictor()
+        predictor.train()
+        risk_score = predictor.predict_risk(reminder)
+    except Exception:
+        risk_score = 0.15
+
     # Persist log entry
     storage.log_call(
         reminder_id=reminder_id,
@@ -293,7 +324,11 @@ def end_simulation():
         transcript=agent.transcript,
         outcome=outcome,
         guardian_note=guardian_note,
-        summary=summary
+        summary=summary,
+        response_latency_sec=avg_latency,
+        coherence_score=avg_coherence,
+        risk_score=risk_score,
+        escalation_tier=0
     )
     
     # Clean memory store

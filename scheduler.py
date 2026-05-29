@@ -170,6 +170,32 @@ def run_reminder_call(reminder: dict, is_test: bool = False):
             print(f"\n[GUARDIAN ALERT - NO RESPONSE] {guardian_note}")
             print(f"Please check on the patient immediately.\n")
 
+    # Calculate average response latency and coherence score across all turns
+    import json
+    latencies = []
+    coherences = []
+    for h in agent.history:
+        if h.get("role") == "assistant":
+            try:
+                data = json.loads(h.get("content", "{}"))
+                if "response_latency_sec" in data:
+                    latencies.append(data["response_latency_sec"])
+                if "coherence_score" in data:
+                    coherences.append(data["coherence_score"])
+            except Exception:
+                pass
+    avg_latency = sum(latencies) / len(latencies) if latencies else None
+    avg_coherence = sum(coherences) / len(coherences) if coherences else None
+
+    # Predict adherence risk score
+    try:
+        from analytics import AdherencePredictor
+        predictor = AdherencePredictor()
+        predictor.train()
+        risk_score = predictor.predict_risk(reminder)
+    except Exception:
+        risk_score = 0.15
+
     # Save to persistent logs
     storage.log_call(
         reminder_id=reminder_id,
@@ -180,7 +206,11 @@ def run_reminder_call(reminder: dict, is_test: bool = False):
         transcript=agent.transcript,
         outcome=outcome,
         guardian_note=guardian_note,
-        summary=summary
+        summary=summary,
+        response_latency_sec=avg_latency,
+        coherence_score=avg_coherence,
+        risk_score=risk_score,
+        escalation_tier=0
     )
 
 def poll_and_execute_scheduler(stop_event: threading.Event):

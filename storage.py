@@ -99,7 +99,11 @@ def update_reminder(reminder_id: str, updates: dict) -> bool:
 
 def log_call(reminder_id: str, patient: str, medication: str, dosage: str, 
              scheduled_time: str, transcript: list, outcome: str, 
-             guardian_note: str, summary: str):
+             guardian_note: str, summary: str,
+             response_latency_sec: float = None,
+             coherence_score: float = None,
+             risk_score: float = None,
+             escalation_tier: int = 0):
     """Append a full summary log of the completed call to logs.jsonl."""
     init_storage()
     log_entry = {
@@ -112,7 +116,11 @@ def log_call(reminder_id: str, patient: str, medication: str, dosage: str,
         "outcome": outcome,
         "guardian_note": guardian_note,
         "summary": summary,
-        "transcript": transcript  # List of dicts: {"role": "Agent"/"Patient", "text": "..."}
+        "transcript": transcript,  # List of dicts: {"role": "Agent"/"Patient", "text": "..."}
+        "response_latency_sec": response_latency_sec,
+        "coherence_score": coherence_score,
+        "risk_score": risk_score,
+        "escalation_tier": escalation_tier
     }
     
     with _storage_lock:

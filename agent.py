@@ -52,29 +52,51 @@ SYSTEM_PROMPT = """You are 'MedRemind', an empathetic, warm, and highly patient 
 
 The patient you are speaking to might be slow, forgetful, easily confused, or feeling unwell. Speak slowly, clearly, and keep your responses short, gentle, and supportive. Always speak in a friendly tone, as if you are a caring family member or personal nurse.
 
-At each step of the conversation, analyze the patient's statement and classify the status into ONE of the following 8 outcomes:
+At each step of the conversation, analyze the patient's statement and classify the status into ONE of the following 9 outcomes:
 1. `TAKEN` — The patient confirms they have just taken the medication in your presence.
 2. `TAKEN_EARLIER` — The patient reports they already took it prior to this call (e.g. "I had it with breakfast").
 3. `SNOOZE` — The patient asks to be called back later or in a specific amount of time (e.g. "Call me in 15 minutes").
 4. `REFUSED` — The patient actively refuses to take the medication (e.g. "I don't want it", "I'm not taking that").
 5. `CONFUSED` — The patient exhibits confusion, doesn't know who you are, or is confused about their pills (e.g. "Who is this?", "What pills?").
 6. `MEDICAL_CONCERN` — The patient mentions feeling sick, dizzy, in pain, or has a physical complaint (e.g. "I feel very dizzy", "My stomach hurts").
-7. `NO_RESPONSE` — The patient says nothing or line was silent.
-8. `OTHER` — The response does not fit any of the above categories, or requires further discussion.
+7. `MEDICAL_EMERGENCY` — The patient mentions critical, life-threatening symptoms (e.g. "chest pain", "difficulty breathing", "fell down", "falling", "can't move", "bleeding", "severe pain").
+8. `NO_RESPONSE` — The patient says nothing or line was silent.
+9. `OTHER` — The response does not fit any of the above categories, or requires further discussion.
 
 You MUST respond strictly in the following JSON format. Do NOT include any markdown blocks, wrapping, or extra text. Output ONLY valid JSON:
 {
   "spoken_reply": "Your warm, slow, and clear spoken reply to the patient",
-  "outcome": "TAKEN | TAKEN_EARLIER | SNOOZE | REFUSED | CONFUSED | MEDICAL_CONCERN | NO_RESPONSE | OTHER",
+  "outcome": "TAKEN | TAKEN_EARLIER | SNOOZE | REFUSED | CONFUSED | MEDICAL_CONCERN | MEDICAL_EMERGENCY | NO_RESPONSE | OTHER",
   "end_call": true_or_false_boolean,
   "guardian_note": "A concise status update for the guardian explaining what is happening."
 }
 
 Rules for ending calls:
 - If outcome is TAKEN, TAKEN_EARLIER, REFUSED, or SNOOZE, set `end_call` to true.
-- If outcome is CONFUSED or MEDICAL_CONCERN, set `end_call` to true (we will escalate to guardian immediately).
+- If outcome is CONFUSED, MEDICAL_CONCERN, or MEDICAL_EMERGENCY, set `end_call` to true (we will escalate to guardian/emergency immediately).
 - For OTHER, set `end_call` to false so you can continue the conversation to clarify, unless you've had 4+ turns.
 """
+
+COHERENT_CORPUS = [
+    "yes I took it",
+    "yes I just took it now",
+    "I took my medicine already",
+    "I had it with my breakfast earlier",
+    "call me back in fifteen minutes",
+    "can you call me back later please",
+    "no I don't want to take my medication",
+    "I'm not taking that today",
+    "I feel dizzy and unwell",
+    "my head hurts can you help me",
+    "what pills are these",
+    "who is calling me",
+    "yes dear I did",
+    "taken already",
+    "yes yes taken",
+    "chest pain can you help",
+    "I fell down and can't get up",
+    "difficulty breathing help me"
+]
 
 def call_llm(messages: list, response_json: bool = True) -> str:
     """Helper to route API requests to Groq, Gemini, or fall back to local mock parsing."""
@@ -217,7 +239,12 @@ def _mock_llm_response(messages: list, response_json: bool) -> str:
         outcome = "NO_RESPONSE"
         spoken_reply = "Hello? Are you there, dear? It's time for your medication."
         guardian_note = "No sound or response from patient."
-    elif any(word in latest_msg for word in ["yes", "took", "had it", "taken", "done", "already"]):
+    elif any(word in latest_msg for word in ["chest pain", "can't breathe", "breathing", "fell down", "falling", "can't move", "bleeding"]):
+        outcome = "MEDICAL_EMERGENCY"
+        spoken_reply = "Oh dear, please stay still and calm! I am calling for emergency help and notifying your caregiver immediately. Just sit tight, help is on the way."
+        end_call = True
+        guardian_note = "CRITICAL EMERGENCY: Patient reported life-threatening symptoms."
+    elif any(word in latest_msg for word in ["yes", "took", "had it", "taken", "done", "already", "haan", "le liya"]):
         if any(word in latest_msg for word in ["earlier", "morning", "breakfast", "already"]):
             outcome = "TAKEN_EARLIER"
             spoken_reply = "Oh, excellent! I'm glad you already took it. Have a wonderful day!"
@@ -233,7 +260,7 @@ def _mock_llm_response(messages: list, response_json: bool) -> str:
         spoken_reply = "No problem at all! I will call you back in a little bit so you can take it then."
         end_call = True
         guardian_note = "Patient requested a snooze / call back."
-    elif any(word in latest_msg for word in ["don't want", "no", "refuse", "won't", "stop", "hate"]):
+    elif any(word in latest_msg for word in ["don't want", "no", "refuse", "won't", "stop", "hate", "nahi"]):
         outcome = "REFUSED"
         spoken_reply = "I understand you feel that way, dear, but these are important. I will let your guardian know so they can check in on you."
         end_call = True
@@ -278,11 +305,58 @@ class AdherenceAgent:
         self.transcript.append({"role": "Agent", "text": greeting})
         return greeting
 
-    def process_turn(self, patient_input: str) -> dict:
+    def calculate_coherence_score(self, text: str) -> float:
+        """Compute semantic coherence of patient reply using TF-IDF cosine similarity."""
+        clean_text = text.strip().lower()
+        if not clean_text:
+            return 0.0
+            
+        # Standard short clear answers are perfectly coherent
+        if clean_text in ["yes", "taken", "haan", "le liya", "no", "nahi", "snooze", "theek hai"]:
+            return 1.0
+            
+        try:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.metrics.pairwise import cosine_similarity
+            import numpy as np
+            
+            vectorizer = TfidfVectorizer().fit(COHERENT_CORPUS)
+            coherent_vectors = vectorizer.transform(COHERENT_CORPUS)
+            
+            reply_vector = vectorizer.transform([clean_text])
+            similarities = cosine_similarity(reply_vector, coherent_vectors)
+            max_similarity = float(np.max(similarities))
+            
+            score = max_similarity * 1.5
+            
+            # Penalize heavily repeated word strings (stuttering/coherence decline indicator)
+            words = clean_text.split()
+            unique_words = set(words)
+            if len(words) > 5 and len(unique_words) / len(words) < 0.6:
+                score *= 0.8
+                
+            return max(0.1, min(1.0, score))
+        except Exception:
+            coherent_keywords = ["yes", "took", "had", "breakfast", "later", "minutes", "no", "refuse", "who", "what", "dizzy", "hurt", "pain", "taken", "dear", "haan", "le liya", "nahi"]
+            matches = sum(1 for kw in coherent_keywords if kw in clean_text)
+            score = matches / max(1, len(clean_text.split()))
+            return max(0.1, min(1.0, score))
+
+    def process_turn(self, patient_input: str, latency_sec: float = None) -> dict:
         self.turn_count += 1
         self.history.append({"role": "user", "content": patient_input})
         self.transcript.append({"role": "Patient", "text": patient_input})
         
+        # Calculate coherence score
+        coherence_score = self.calculate_coherence_score(patient_input)
+        
+        # Calculate latency if not provided
+        if latency_sec is None:
+            if not patient_input.strip():
+                latency_sec = 10.0
+            else:
+                latency_sec = round(random.uniform(2.2, 5.8) + len(patient_input) * 0.05, 1)
+                
         response_str = call_llm(self.history, response_json=True)
         
         # Advanced self-healing parser
@@ -298,7 +372,6 @@ class AdherenceAgent:
         try:
             res = json.loads(cleaned_str)
         except Exception:
-            # Try to find JSON boundary {...}
             try:
                 start = cleaned_str.find("{")
                 end = cleaned_str.rfind("}") + 1
@@ -315,10 +388,9 @@ class AdherenceAgent:
                 if match:
                     clean_text = match.group(1)
             
-            # Clean reasoning/thoughts prefixes (Gemma details)
             clean_text = re.sub(r"^\*.*?\n", "", clean_text, flags=re.MULTILINE)
             clean_text = re.sub(r"^Constraint.*?\n", "", clean_text, flags=re.MULTILINE)
-            clean_text = re.sub(r"^[a-zA-Z\s]+:\s*.*?$", "", clean_text, flags=re.MULTILINE) # remove labels like 'spoken_reply:'
+            clean_text = re.sub(r"^[a-zA-Z\s]+:\s*.*?$", "", clean_text, flags=re.MULTILINE)
             clean_text = clean_text.strip()
             
             res = {
@@ -337,6 +409,18 @@ class AdherenceAgent:
             res["end_call"] = self.turn_count >= 4
         if "guardian_note" not in res or not res["guardian_note"]:
             res["guardian_note"] = "Conversing with patient."
+            
+        # Force MEDICAL_EMERGENCY if patient mentions critical symptoms
+        emergency_words = ["chest pain", "can't breathe", "difficulty breathing", "fell down", "falling", "can't move", "bleeding", "severe pain"]
+        if any(kw in patient_input.lower() for kw in emergency_words):
+            res["outcome"] = "MEDICAL_EMERGENCY"
+            res["end_call"] = True
+            res["spoken_reply"] = "Oh dear, please stay still and calm! I am calling for emergency help and notifying your caregiver immediately. Just sit tight, help is on the way."
+            res["guardian_note"] = "CRITICAL EMERGENCY: Patient reported life-threatening symptoms."
+            
+        # Attach response_latency_sec and coherence_score
+        res["response_latency_sec"] = latency_sec
+        res["coherence_score"] = coherence_score
                 
         self.history.append({"role": "assistant", "content": json.dumps(res)})
         self.transcript.append({"role": "Agent", "text": res.get("spoken_reply", "")})
@@ -359,30 +443,38 @@ class AdherenceAgent:
 def generate_patient_reply(patient_name: str, medication: str, dosage: str, last_agent_speech: str) -> str:
     """Simulates a patient's response using LLM (or mock fallbacks) for automated background runs."""
     if not HAS_KEYS:
-        # Graceful random offline mock fallback
+        # Graceful random offline mock fallback with new chaos personas
         replies = [
             f"Yes, I just took my {medication} with water.",
             f"I already had it with my breakfast earlier, dear.",
             "Can you call me back in 15 minutes? I am watching my favorite show right now.",
             f"No, I don't want to take this {medication} pill today.",
             "Who is this? What pills are you talking about?",
-            "I'm feeling very dizzy and my head hurts."
+            "I'm feeling very dizzy and my head hurts.",
+            "What? What did you say? What?",
+            "Stop calling me! I am hanging up now!",
+            "",  # Silent patient
+            "The weather is very nice today, the mailman brought some nice flowers." # Wandering patient
         ]
         return random.choice(replies)
 
     system_prompt = f"""You are simulating an elderly patient named {patient_name} who is being called by an AI caregiver reminder to take their {medication} ({dosage}).
 
-Based on the caregiver's statement, reply as {patient_name}. Speak slowly, in short sentences. Sometimes you are cooperative, sometimes you are a bit forgetful or slow, and occasionally you might complain of feeling slightly dizzy, ask to snooze, or be a bit confused. 
+Based on the caregiver's statement, reply as {patient_name}. Speak slowly, in short sentences.
 
 Choose ONE of these random personas for this call:
-1. Cooperative (takes the pill immediately).
-2. Took it already (took it earlier with breakfast/lunch).
-3. Forgetful/Snooze (asks to call back in 10 or 15 minutes).
-4. Uncooperative/Refused (dislikes the pill or refuses it).
-5. Confused (asks who is calling and what pills).
-6. Unwell (mentions feeling dizzy, tired, or having a headache).
+1. Cooperative: Takes the pill immediately (e.g. "Yes, I am taking it now dear").
+2. Took it already: Took it earlier with breakfast or lunch (e.g. "I already took it with breakfast").
+3. Forgetful/Snooze: Asks to call back in 10 or 15 minutes.
+4. Uncooperative/Refused: Dislikes the pill or refuses it.
+5. Confused: Asks who is calling and what pills.
+6. Unwell: Mentions feeling dizzy, tired, or having a headache.
+7. Forgetful (Confusion/Hearing): Answers "What? What did you say?" or similar hearing confusion to every question.
+8. Angry: Irritated by the call, tells the caller to stop calling and tries to hang up.
+9. Silent: Patient says absolutely nothing, returns an empty string "".
+10. Wandering: Tells completely off-topic stories (e.g. about pets, weather, childhood) and ignores the pill reminder.
 
-Your output MUST be ONLY the spoken text of the patient. Keep it short, natural, and realistic for an elderly person. Do NOT add any notes, headers, or markdown blocks."""
+Your output MUST be ONLY the spoken text of the patient. Keep it short, natural, and realistic for an elderly person. If you chose the 'Silent' persona, output nothing at all (empty response). Do NOT add any notes, headers, or markdown blocks."""
 
     prompt = [
         {"role": "system", "content": system_prompt},
@@ -391,7 +483,6 @@ Your output MUST be ONLY the spoken text of the patient. Keep it short, natural,
     
     try:
         reply = call_llm(prompt, response_json=False)
-        # Re-verify and clean any markdown blocks or quotes
         reply = re.sub(r'^["\']|["\']$', '', reply.strip())
         return reply if reply else "Yes, I am here dear."
     except Exception:
