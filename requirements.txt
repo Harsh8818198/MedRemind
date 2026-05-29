@@ -1,0 +1,7 @@
+requests
+python-dotenv
+pyttsx3
+SpeechRecognition
+flask
+# Note: For voice input, you may also install PyAudio:
+# pip install pyaudio

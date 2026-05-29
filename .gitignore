@@ -1,0 +1,27 @@
+# Environment secrets
+.env
+
+# Python cache & build files
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Local databases/logs (keep directory structure but ignore runtime records)
+data/logs.jsonl
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# IDE & system configurations
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
