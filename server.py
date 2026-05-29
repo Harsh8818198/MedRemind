@@ -69,19 +69,33 @@ def get_reminders():
 
 @app.route("/api/reminders", methods=["POST"])
 def add_reminder():
-    """Add a new medication reminder to the schedule."""
+    """Add a new medication reminder to the schedule, with DDI safety validation."""
     data = request.json
     if not data or not all(k in data for k in ["patient", "medication", "dosage", "time"]):
         return jsonify({"status": "error", "message": "Missing required fields"}), 400
         
     try:
+        # Perform Drug-Drug Interaction check prior to adding
+        import drug_safety
+        reminders = storage.load_reminders()
+        existing_meds = [r["medication"] for r in reminders if r["patient"].lower() == data["patient"].lower()]
+        validation = drug_safety.validate_new_medication(data["medication"], existing_meds)
+        
         new_reminder = storage.add_reminder(
             patient=data["patient"],
             medication=data["medication"],
             dosage=data["dosage"],
             time_str=data["time"]
         )
-        return jsonify({"status": "success", "reminder": new_reminder})
+        
+        return jsonify({
+            "status": "success", 
+            "reminder": new_reminder,
+            "safety": {
+                "safe": validation["safe"],
+                "warnings": validation["warnings"]
+            }
+        })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
 
@@ -341,6 +355,94 @@ def end_simulation():
         "outcome": outcome,
         "guardian_note": guardian_note
     })
+
+# --- CLINICAL ANALYTICS AND ESCALATION API ---
+
+@app.route("/api/analytics/risk", methods=["GET"])
+def get_risk_scores():
+    """Retrieve predicted adherence risk scores for all active reminders."""
+    try:
+        from analytics import AdherencePredictor
+        predictor = AdherencePredictor()
+        predictor.train()
+        
+        reminders = storage.load_reminders()
+        risks = {}
+        for r in reminders:
+            risk = predictor.predict_risk(r)
+            risks[r["id"]] = {
+                "risk_score": round(risk, 2),
+                "level": "High" if risk > 0.7 else "Medium" if risk > 0.3 else "Low"
+            }
+        return jsonify(risks)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/api/analytics/cognitive/<patient_name>", methods=["GET"])
+def get_cognitive_trend(patient_name):
+    """Retrieve 30-day historical cognitive trend variables for charting."""
+    try:
+        from analytics import CognitiveTracker
+        trend = CognitiveTracker.get_trend(patient_name, days=30)
+        decline = CognitiveTracker.detect_decline(patient_name)
+        return jsonify({
+            "patient": patient_name,
+            "trend": trend,
+            "decline_flag": decline
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/api/escalation/history", methods=["GET"])
+def get_escalation_history():
+    """Retrieve all historical escalation events from the call logs."""
+    try:
+        logs = storage.load_logs()
+        escalations = []
+        for log in logs:
+            tier = log.get("escalation_tier", 0)
+            if tier > 0:
+                escalations.append({
+                    "timestamp": log.get("timestamp"),
+                    "patient": log.get("patient"),
+                    "medication": log.get("medication"),
+                    "dosage": log.get("dosage"),
+                    "outcome": log.get("outcome"),
+                    "tier": tier,
+                    "guardian_note": log.get("guardian_note")
+                })
+        return jsonify(list(reversed(escalations)))
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/api/escalation/test", methods=["POST"])
+def trigger_test_escalation():
+    """Trigger a mock/test SMS escalation alert to caregiver phone."""
+    data = request.json or {}
+    outcome = data.get("outcome", "MEDICAL_EMERGENCY")
+    
+    mock_reminder = {
+        "id": "test-mock-id",
+        "patient": data.get("patient", "Grandpa"),
+        "medication": data.get("medication", "Lisinopril"),
+        "dosage": data.get("dosage", "10mg"),
+        "time": "12:00"
+    }
+    
+    try:
+        import escalation
+        tier = escalation.escalate(
+            reminder=mock_reminder,
+            outcome=outcome,
+            custom_note=data.get("custom_note", "Test alert triggered from dashboard.")
+        )
+        return jsonify({
+            "status": "success",
+            "message": f"Test escalation Tier {tier} triggered successfully.",
+            "tier": tier
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # Global stop event and thread references
 stop_event = threading.Event()

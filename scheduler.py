@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import storage
 import voice
 from agent import AdherenceAgent
+import escalation
 
 # Load env configurations
 load_dotenv(override=True)
@@ -103,6 +104,7 @@ def run_reminder_call(reminder: dict, is_test: bool = False):
     
     # Handle Outcomes and update reminder state
     today_str = datetime.now().strftime("%Y-%m-%d")
+    escalation_tier = 0
     
     if outcome in ["TAKEN", "TAKEN_EARLIER"]:
         # Success state
@@ -113,6 +115,17 @@ def run_reminder_call(reminder: dict, is_test: bool = False):
         })
         print(f"[Success] Adherence logged. Guardian summary: {summary}")
         
+    elif outcome == "MEDICAL_EMERGENCY":
+        # Critical crisis
+        storage.update_reminder(reminder_id, {
+            "last_run_date": today_str,
+            "next_run": scheduled_time,
+            "retry_count": 0
+        })
+        escalation_tier = escalation.escalate(reminder, "MEDICAL_EMERGENCY", agent.transcript, guardian_note)
+        print(f"\n🔥 [GUARDIAN CRITICAL ALERT - MEDICAL EMERGENCY] {guardian_note}")
+        print(f"Summary: {summary}\n")
+        
     elif outcome in ["REFUSED", "CONFUSED", "MEDICAL_CONCERN", "OTHER"]:
         # Serious issue / Escalation state
         storage.update_reminder(reminder_id, {
@@ -120,9 +133,9 @@ def run_reminder_call(reminder: dict, is_test: bool = False):
             "next_run": scheduled_time,
             "retry_count": 0
         })
-        # Highlight alert to guardian
+        escalation_tier = escalation.escalate(reminder, outcome, agent.transcript, guardian_note)
         color = "\033[91m" if outcome != "OTHER" else "\033[93m"
-        print(f"\n[GUARDIAN ESCALATION - {outcome}] {guardian_note}")
+        print(f"\n{color}[GUARDIAN ESCALATION - {outcome}] {guardian_note}\033[0m")
         print(f"Summary: {summary}\n")
         
     elif outcome == "SNOOZE":
@@ -157,6 +170,7 @@ def run_reminder_call(reminder: dict, is_test: bool = False):
                 "next_run": future_time,
                 "retry_count": next_retry_count
             })
+            escalation_tier = escalation.escalate(reminder, "NO_RESPONSE")
             print(f"[No Response] Retry {next_retry_count}/{retry_limit} scheduled at {future_time}.")
         else:
             # Escalated failure
@@ -167,8 +181,8 @@ def run_reminder_call(reminder: dict, is_test: bool = False):
             })
             outcome = "NO_RESPONSE_FAILED"
             guardian_note = f"Call failed. No response from patient after {retry_limit} attempts."
+            escalation_tier = escalation.escalate(reminder, "NO_RESPONSE_FAILED", agent.transcript, guardian_note)
             print(f"\n[GUARDIAN ALERT - NO RESPONSE] {guardian_note}")
-            print(f"Please check on the patient immediately.\n")
 
     # Calculate average response latency and coherence score across all turns
     import json
@@ -210,7 +224,7 @@ def run_reminder_call(reminder: dict, is_test: bool = False):
         response_latency_sec=avg_latency,
         coherence_score=avg_coherence,
         risk_score=risk_score,
-        escalation_tier=0
+        escalation_tier=escalation_tier
     )
 
 def poll_and_execute_scheduler(stop_event: threading.Event):
@@ -222,6 +236,7 @@ def poll_and_execute_scheduler(stop_event: threading.Event):
         now = datetime.now()
         current_time_str = now.strftime("%H:%M")
         today_str = now.strftime("%Y-%m-%d")
+        future_30_str = (now + timedelta(minutes=30)).strftime("%H:%M")
         
         reminders = storage.load_reminders()
         
@@ -229,6 +244,37 @@ def poll_and_execute_scheduler(stop_event: threading.Event):
             if not r.get("active", True):
                 continue
                 
+            # --- PRE-EMPTIVE REMINDERS (30 mins early if risk > 0.7) ---
+            if r["next_run"] == future_30_str and r["last_run_date"] != today_str:
+                try:
+                    from analytics import AdherencePredictor
+                    predictor = AdherencePredictor()
+                    predictor.train()
+                    risk = predictor.predict_risk(r)
+                except Exception:
+                    risk = 0.0
+                    
+                if risk > 0.7:
+                    print(f"\n[PRE-EMPTIVE TRIGGER] {r['patient']} has a high predicted risk ({risk:.2f}) of missing the scheduled {r['time']} dose of {r['medication']}.")
+                    print(f"Spawning pre-emptive call 30 minutes early at {current_time_str}...\n")
+                    
+                    # Spawn pre-emptive call thread
+                    r_preempt = r.copy()
+                    r_preempt["next_run"] = current_time_str
+                    
+                    call_thread = threading.Thread(
+                        target=run_reminder_call, 
+                        args=(r_preempt,),
+                        daemon=True
+                    )
+                    call_thread.start()
+                    
+                    # Prevent standard call from triggering at normal next_run time
+                    r["last_run_date"] = "pending"
+                    storage.save_reminders(reminders)
+                    continue
+
+            # --- STANDARD REMINDERS ---
             # A reminder is due if:
             # 1. next_run matches current_time
             # 2. it hasn't been successfully completed today (last_run_date != today_str) OR it's a retry/snooze (where next_run was calculated and last_run_date is blank/previous)
