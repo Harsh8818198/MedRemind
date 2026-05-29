@@ -1,6 +1,7 @@
 import os
 import sys
 import uuid
+import datetime
 from flask import Flask, jsonify, request, render_template, send_from_directory
 from dotenv import load_dotenv
 
@@ -23,8 +24,19 @@ app = Flask(
 )
 
 # Active interactive call sessions memory store
-# Maps session_id -> { "agent": AdherenceAgent, "reminder": dict, "turns": int }
+# Maps session_id -> { "agent": AdherenceAgent, "reminder": dict, "turns": int, "last_activity": datetime }
 active_sessions = {}
+
+def cleanup_sessions():
+    """Remove inactive/abandoned simulation sessions older than 10 minutes (600 seconds)."""
+    now = datetime.datetime.now()
+    expired_ids = []
+    for sid, sess in list(active_sessions.items()):
+        last_act = sess.get("last_activity", now)
+        if (now - last_act).total_seconds() > 600:
+            expired_ids.append(sid)
+    for sid in expired_ids:
+        del active_sessions[sid]
 
 @app.route("/")
 def home():
@@ -34,14 +46,6 @@ def home():
 @app.route("/api/status", methods=["GET"])
 def get_status():
     """Retrieve detailed system and engine status diagnostics."""
-    tally_online = False
-    try:
-        from core.tally_api import list_companies
-        list_companies()
-        tally_online = True
-    except Exception:
-        tally_online = False
-
     scheduler_active = bool(scheduler_thread and scheduler_thread.is_alive())
     
     return jsonify({
@@ -50,7 +54,7 @@ def get_status():
         "api_connected": HAS_KEYS,
         "api_provider": API_PROVIDER,
         "model_name": MODEL_NAME,
-        "tally_online": tally_online,
+        "tally_online": False,
         "reminders_count": len(storage.load_reminders()),
         "logs_count": len(storage.load_logs())
     })
@@ -122,6 +126,7 @@ def get_logs():
 @app.route("/api/simulate/start", methods=["POST"])
 def start_simulation():
     """Initiate a stateful check-in session for a specific reminder."""
+    cleanup_sessions()
     data = request.json
     if not data or "reminder_id" not in data:
         return jsonify({"status": "error", "message": "Missing reminder ID"}), 400
@@ -155,7 +160,8 @@ def start_simulation():
     active_sessions[session_id] = {
         "agent": agent,
         "reminder": reminder,
-        "turns": 0
+        "turns": 0,
+        "last_activity": datetime.datetime.now()
     }
     
     return jsonify({
@@ -170,6 +176,7 @@ def start_simulation():
 @app.route("/api/simulate/turn", methods=["POST"])
 def process_simulation_turn():
     """Process a single dialogue turn input from the patient."""
+    cleanup_sessions()
     data = request.json
     if not data or not all(k in data for k in ["session_id", "patient_reply"]):
         return jsonify({"status": "error", "message": "Missing required turn parameters"}), 400
@@ -182,6 +189,7 @@ def process_simulation_turn():
         
     session = active_sessions[session_id]
     agent = session["agent"]
+    session["last_activity"] = datetime.datetime.now()
     
     # Process turn with Gemini LLM (or rules engine fallback if no key)
     res = agent.process_turn(reply)
@@ -204,6 +212,7 @@ def process_simulation_turn():
 @app.route("/api/simulate/end", methods=["POST"])
 def end_simulation():
     """Generate final summary and write call session to log files."""
+    cleanup_sessions()
     data = request.json
     if not data or not all(k in data for k in ["session_id", "outcome", "guardian_note"]):
         return jsonify({"status": "error", "message": "Missing outcome data"}), 400
@@ -226,8 +235,6 @@ def end_simulation():
     
     # Update reminder status on schedule if it's a real reminder
     if reminder_id != "mock-test":
-        today_str = datetime = datetime_now = ""
-        import datetime
         today_str = datetime.datetime.now().strftime("%Y-%m-%d")
         
         if outcome in ["TAKEN", "TAKEN_EARLIER"]:
@@ -242,6 +249,39 @@ def end_simulation():
                 "next_run": scheduled_time,
                 "retry_count": 0
             })
+        elif outcome == "SNOOZE":
+            patient_text = " ".join([t["text"] for t in agent.transcript if t["role"] == "Patient"])
+            snooze_mins = scheduler.parse_snooze_minutes(patient_text)
+            future = datetime.datetime.now() + datetime.timedelta(minutes=snooze_mins)
+            future_time = future.strftime("%H:%M")
+            
+            storage.update_reminder(reminder_id, {
+                "next_run": future_time,
+                "retry_count": 0
+            })
+        elif outcome == "NO_RESPONSE":
+            retry_limit = 3
+            current_retries = reminder.get("retry_count", 0)
+            
+            if current_retries < retry_limit:
+                next_retry_count = current_retries + 1
+                retry_mins = int(os.getenv("RETRY_INTERVAL_MINUTES", "5"))
+                future = datetime.datetime.now() + datetime.timedelta(minutes=retry_mins)
+                future_time = future.strftime("%H:%M")
+                
+                storage.update_reminder(reminder_id, {
+                    "next_run": future_time,
+                    "retry_count": next_retry_count
+                })
+            else:
+                # Escalated failure
+                storage.update_reminder(reminder_id, {
+                    "last_run_date": today_str,
+                    "next_run": scheduled_time,
+                    "retry_count": 0
+                })
+                outcome = "NO_RESPONSE_FAILED"
+                guardian_note = f"Call failed. No response from patient after {retry_limit} attempts."
             
     # Persist log entry
     storage.log_call(
@@ -257,7 +297,8 @@ def end_simulation():
     )
     
     # Clean memory store
-    del active_sessions[session_id]
+    if session_id in active_sessions:
+        del active_sessions[session_id]
     
     return jsonify({
         "status": "success",
