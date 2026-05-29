@@ -56,7 +56,7 @@ def log_call(reminder_id: str, patient: str, medication: str, dosage: str,
     """Append a full summary log to the SQLite database."""
     init_storage()
     with _storage_lock:
-        database.log_call(
+        log_id = database.log_call(
             reminder_id=reminder_id,
             patient=patient,
             medication=medication,
@@ -71,6 +71,15 @@ def log_call(reminder_id: str, patient: str, medication: str, dosage: str,
             risk_score=risk_score,
             escalation_tier=escalation_tier
         )
+        
+        # Trigger synthesized conversation recording generation
+        try:
+            import voice
+            voice.generate_call_recording(transcript, log_id)
+        except Exception as e:
+            print(f"[Storage Voice Recording Error]: {e}")
+            
+        return log_id
 
 def load_logs() -> list:
     """Load all call logs from the SQLite database."""

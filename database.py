@@ -319,8 +319,10 @@ def log_call(reminder_id: str, patient: str, medication: str, dosage: str,
         risk_score,
         escalation_tier
     ))
+    log_id = cursor.lastrowid
     conn.commit()
     conn.close()
+    return log_id
 
 def load_logs() -> list[dict]:
     """Retrieve all call logs from SQLite database, sorted chronologically."""

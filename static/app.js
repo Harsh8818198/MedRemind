@@ -387,7 +387,15 @@ function renderLogsBoard(logs) {
                         <div>
                             <h4 style="color:var(--clr-primary); font-family:'Outfit'; margin-bottom:8px; font-weight:700;"><i data-lucide="shield-alert" style="width:14px; height:14px; display:inline-block; vertical-align:middle; margin-right:4px;"></i> Caregiver Audit Details</h4>
                             <p style="font-size: 13.5px; line-height: 1.6; margin-bottom: 12px;"><strong>Guardian Alert Note:</strong><br>${escapeHtml(log.guardian_note)}</p>
-                            <p style="font-size: 13.5px; line-height: 1.6;"><strong>Outcome:</strong> <span class="badge-outcome ${badgeClass}">${out.replace("_", " ")}</span></p>
+                            <p style="font-size: 13.5px; line-height: 1.6; margin-bottom: 15px;"><strong>Outcome:</strong> <span class="badge-outcome ${badgeClass}">${out.replace("_", " ")}</span></p>
+                            
+                            <!-- Premium Voice Recording Player -->
+                            <div style="margin-top: 18px; border-top: 1px solid var(--border-glass); padding-top: 18px;">
+                                <h4 style="color:var(--clr-primary); font-family:'Outfit'; margin-bottom:10px; font-weight:700; display:flex; align-items:center; gap:6px;"><i data-lucide="volume-2" style="width:16px; height:16px; color:var(--clr-primary);"></i> Call Recording Playback</h4>
+                                <div class="audio-player-container" style="display:flex; align-items:center; gap:12px; margin-top:8px;">
+                                    <audio controls src="/static/recordings/${log.id}.wav" style="width: 100%; height: 38px; border-radius: 12px; background: #030712; border: 1px solid rgba(197,160,89,0.15); outline: none;" aria-label="Simulated conversation playback"></audio>
+                                </div>
+                            </div>
                         </div>
                         
                         <!-- Right: Scrolling Transcript Bubbles -->
