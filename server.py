@@ -85,7 +85,8 @@ def add_reminder():
             patient=data["patient"],
             medication=data["medication"],
             dosage=data["dosage"],
-            time_str=data["time"]
+            time_str=data["time"],
+            preferred_language=data.get("preferred_language", "English")
         )
         
         return jsonify({
@@ -163,7 +164,8 @@ def start_simulation():
     agent = AdherenceAgent(
         patient_name=reminder["patient"],
         medication=reminder["medication"],
-        dosage=reminder["dosage"]
+        dosage=reminder["dosage"],
+        preferred_language=reminder.get("preferred_language", "English")
     )
     
     # Get the opening greeting statement

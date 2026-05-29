@@ -34,9 +34,16 @@ def init_db():
         next_run TEXT NOT NULL,
         last_run_date TEXT DEFAULT '',
         active INTEGER DEFAULT 1,
-        retry_count INTEGER DEFAULT 0
+        retry_count INTEGER DEFAULT 0,
+        preferred_language TEXT DEFAULT 'English'
     )
     """)
+    
+    # Ensure preferred_language column exists (migration helper for existing DB)
+    try:
+        cursor.execute("ALTER TABLE reminders ADD COLUMN preferred_language TEXT DEFAULT 'English'")
+    except sqlite3.OperationalError:
+        pass # Column already exists
     
     # 2. Create Logs table
     cursor.execute("""
@@ -157,6 +164,7 @@ def row_to_reminder(row) -> dict:
         return {}
     r = dict(row)
     r["active"] = bool(r["active"])
+    r["preferred_language"] = r.get("preferred_language", "English")
     return r
 
 def row_to_log(row) -> dict:
@@ -193,8 +201,8 @@ def save_reminders(reminders_list: list):
     cursor.execute("DELETE FROM reminders")
     for r in reminders_list:
         cursor.execute("""
-        INSERT INTO reminders (id, patient, medication, dosage, time, next_run, last_run_date, active, retry_count)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO reminders (id, patient, medication, dosage, time, next_run, last_run_date, active, retry_count, preferred_language)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             r["id"],
             r["patient"],
@@ -204,12 +212,13 @@ def save_reminders(reminders_list: list):
             r["next_run"],
             r.get("last_run_date", ""),
             1 if r.get("active", True) else 0,
-            r.get("retry_count", 0)
+            r.get("retry_count", 0),
+            r.get("preferred_language", "English")
         ))
     conn.commit()
     conn.close()
 
-def add_reminder(patient: str, medication: str, dosage: str, time_str: str) -> dict:
+def add_reminder(patient: str, medication: str, dosage: str, time_str: str, preferred_language: str = "English") -> dict:
     """Add a new reminder to SQLite, matching storage.py signature."""
     # Validate time format
     try:
@@ -227,14 +236,15 @@ def add_reminder(patient: str, medication: str, dosage: str, time_str: str) -> d
         "next_run": time_str,
         "last_run_date": "",
         "active": True,
-        "retry_count": 0
+        "retry_count": 0,
+        "preferred_language": preferred_language
     }
     
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-    INSERT INTO reminders (id, patient, medication, dosage, time, next_run, last_run_date, active, retry_count)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO reminders (id, patient, medication, dosage, time, next_run, last_run_date, active, retry_count, preferred_language)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         new_reminder["id"],
         new_reminder["patient"],
@@ -244,7 +254,8 @@ def add_reminder(patient: str, medication: str, dosage: str, time_str: str) -> d
         new_reminder["next_run"],
         new_reminder["last_run_date"],
         1,
-        0
+        0,
+        new_reminder["preferred_language"]
     ))
     conn.commit()
     conn.close()

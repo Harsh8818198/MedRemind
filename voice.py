@@ -175,7 +175,8 @@ def listen(timeout_sec: int = 6, reminder: dict = None, last_agent_speech: str =
         med = reminder["medication"] if reminder else "Aspirin"
         dos = reminder["dosage"] if reminder else "75mg"
         
-        reply = generate_patient_reply(p_name, med, dos, last_agent_speech)
+        pref_lang = reminder.get("preferred_language", "English") if reminder else "English"
+        reply = generate_patient_reply(p_name, med, dos, last_agent_speech, preferred_language=pref_lang)
         print(f"[Simulated Patient Reply]: {reply}")
         return reply
 

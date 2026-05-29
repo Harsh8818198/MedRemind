@@ -52,8 +52,9 @@ def run_reminder_call(reminder: dict, is_test: bool = False):
     
     print(f"\n[ALERT] Starting medication reminder call for {patient} ({medication} {dosage})...")
     
+    preferred_language = reminder.get("preferred_language", "English")
     # Initialize the agent
-    agent = AdherenceAgent(patient, medication, dosage)
+    agent = AdherenceAgent(patient, medication, dosage, preferred_language=preferred_language)
     
     # Start call with introductory greeting
     speech = agent.start_call()

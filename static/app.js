@@ -174,6 +174,9 @@ function renderTodayScheduleList() {
         }
         
         const isNight = r.time >= "18:00" || r.time < "06:00";
+        const lang = r.preferred_language || 'English';
+        const langClass = 'badge-language lang-' + lang.toLowerCase();
+        
         const item = document.createElement("div");
         item.className = "schedule-item-row";
         item.innerHTML = `
@@ -182,8 +185,11 @@ function renderTodayScheduleList() {
                 <span class="time-text">${formatTime12h(r.time)}</span>
             </div>
             <div class="schedule-med-info">
-                <span class="med-name">${escapeHtml(r.medication)} ${escapeHtml(r.dosage)}</span>
-                <span class="med-patient">1 Tablet</span>
+                <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                    <span class="med-name">${escapeHtml(r.medication)} ${escapeHtml(r.dosage)}</span>
+                    <span class="${langClass}" style="margin: 0; font-size: 8px; padding: 2px 6px;">${escapeHtml(lang)}</span>
+                </div>
+                <span class="med-patient">${escapeHtml(r.patient)}</span>
             </div>
             <div class="schedule-status-action">
                 ${statusBtn}
@@ -229,9 +235,15 @@ function renderScheduleBoard(reminders) {
         const statusClass = r.active ? "online" : "offline";
         const statusLabel = r.active ? "ACTIVE" : "DISABLED";
         
+        const lang = r.preferred_language || 'English';
+        const langClass = 'badge-language lang-' + lang.toLowerCase();
+        
         tr.innerHTML = `
             <td><strong>${escapeHtml(r.patient)}</strong></td>
-            <td><span class="badge">${escapeHtml(r.medication)}</span></td>
+            <td>
+                <span class="badge">${escapeHtml(r.medication)}</span>
+                <span class="${langClass}">${escapeHtml(lang)}</span>
+            </td>
             <td>${escapeHtml(r.dosage)}</td>
             <td><strong style="color:var(--clr-blue); font-size:14.5px;">${r.time}</strong></td>
             <td><span class="text-secondary">${r.next_run}</span></td>
@@ -473,7 +485,8 @@ function initModalControls() {
             patient: document.getElementById("input-patient").value.trim(),
             medication: document.getElementById("input-medication").value.trim(),
             dosage: document.getElementById("input-dosage").value.trim(),
-            time: document.getElementById("input-time").value
+            time: document.getElementById("input-time").value,
+            preferred_language: document.getElementById("input-language").value
         };
         
         try {

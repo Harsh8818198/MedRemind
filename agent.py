@@ -229,50 +229,107 @@ def _mock_llm_response(messages: list, response_json: bool) -> str:
     if not response_json:
         return "The elderly patient was contacted for their medication reminder. The conversation was conducted successfully, and the response was recorded for tracking."
 
+    # Identify preferred language from system prompt or greeting
+    system_content = messages[0]["content"] if (messages and messages[0]["role"] == "system") else ""
+    lang = "English"
+    if "Hinglish" in system_content:
+        lang = "Hinglish"
+    elif "Hindi" in system_content:
+        lang = "Hindi"
+
     # Identify outcome based on keyword matching
     outcome = "OTHER"
-    spoken_reply = "I understand, dear. Could you tell me if you've taken your pills yet?"
+    
+    # Language-specific default / other replies
+    if lang == "Hindi":
+        spoken_reply = "मैं समझती हूँ। क्या आप मुझे बता सकते हैं कि क्या आपने अपनी गोलियाँ ले ली हैं?"
+    elif lang == "Hinglish":
+        spoken_reply = "Main samajhti hoon. Kya aap mujhe sakte hain ki kya aapne apni medicines le li hain?"
+    else:
+        spoken_reply = "I understand, dear. Could you tell me if you've taken your pills yet?"
+        
     end_call = False
     guardian_note = "Conversing with patient."
 
+    # Detect patient input empty/silent
     if not latest_msg or latest_msg.strip() == "":
         outcome = "NO_RESPONSE"
-        spoken_reply = "Hello? Are you there, dear? It's time for your medication."
+        if lang == "Hindi":
+            spoken_reply = "हेलो? क्या आप वहाँ हैं? आपकी दवाई का समय हो गया है।"
+        elif lang == "Hinglish":
+            spoken_reply = "Hello? Aap wahan hain dear? Medicine lene ka time ho gaya hai."
+        else:
+            spoken_reply = "Hello? Are you there, dear? It's time for your medication."
         guardian_note = "No sound or response from patient."
-    elif any(word in latest_msg for word in ["chest pain", "can't breathe", "breathing", "fell down", "falling", "can't move", "bleeding"]):
+    elif any(word in latest_msg for word in ["chest pain", "can't breathe", "breathing", "fell down", "falling", "can't move", "bleeding", "severe pain", "सीने में दर्द", "सांस नहीं आ रही", "सांस लेने में तकलीफ", "गिर गया", "गिर गई", "चल नहीं सकता", "खून", "बहुत दर्द", "seene me dard", "seene mein dard", "saans nahi aa rahi", "saans lene me", "gir gaya", "gir gayi", "chal nahi sakta", "khoon", "bahut dard"]):
         outcome = "MEDICAL_EMERGENCY"
-        spoken_reply = "Oh dear, please stay still and calm! I am calling for emergency help and notifying your caregiver immediately. Just sit tight, help is on the way."
+        if lang == "Hindi":
+            spoken_reply = "अरे, कृपया शांत रहें! मैं आपातकालीन सहायता बुला रही हूँ और आपके अभिभावक को तुरंत सूचित कर रही हूँ। बस रुकिए, मदद आ रही है।"
+        elif lang == "Hinglish":
+            spoken_reply = "Oh dear, please shaant rahiye! Main emergency help ko call kar rahi hoon aur aapke caregiver ko inform kar rahi hoon. Bas thodi der rukiye, help aa rahi hai."
+        else:
+            spoken_reply = "Oh dear, please stay still and calm! I am calling for emergency help and notifying your caregiver immediately. Just sit tight, help is on the way."
         end_call = True
         guardian_note = "CRITICAL EMERGENCY: Patient reported life-threatening symptoms."
-    elif any(word in latest_msg for word in ["yes", "took", "had it", "taken", "done", "already", "haan", "le liya"]):
-        if any(word in latest_msg for word in ["earlier", "morning", "breakfast", "already"]):
+    elif any(word in latest_msg for word in ["yes", "took", "had it", "taken", "done", "already", "haan", "le liya", "हाँ", "हाँ जी", "ले ली", "खा ली", "ले लिया", "खा लिया", "पहले ही", "सुबह ही", "नाश्ते के साथ", "haanjee", "haan ji", "kha liya", "kha li", "le li", "pehle hi"]):
+        if any(word in latest_msg for word in ["earlier", "morning", "breakfast", "already", "पहले ही", "सुबह ही", "नाश्ते के साथ", "pehle hi"]):
             outcome = "TAKEN_EARLIER"
-            spoken_reply = "Oh, excellent! I'm glad you already took it. Have a wonderful day!"
+            if lang == "Hindi":
+                spoken_reply = "अरे, बहुत अच्छा! मुझे ख़ुशी है कि आपने इसे पहले ही ले लिया। आपका दिन शुभ हो!"
+            elif lang == "Hinglish":
+                spoken_reply = "Oh, bahut badhiya! Mujhe khushi hai ki aapne ise pehle hi le liya. Aapka din accha rahe!"
+            else:
+                spoken_reply = "Oh, excellent! I'm glad you already took it. Have a wonderful day!"
             end_call = True
             guardian_note = "Patient took the medication earlier."
         else:
             outcome = "TAKEN"
-            spoken_reply = "Wonderful! Thank you for taking it. Keep resting, and I will call you for the next one."
+            if lang == "Hindi":
+                spoken_reply = "बहुत बढ़िया! दवा लेने के लिए धन्यवाद। आप आराम करें और मैं अगली खुराक के लिए आपको फोन करूँगी।"
+            elif lang == "Hinglish":
+                spoken_reply = "Bahut accha! Medicine lene ke liye shukriya. Aap aaram karein, main next dose ke liye call karungi."
+            else:
+                spoken_reply = "Wonderful! Thank you for taking it. Keep resting, and I will call you for the next one."
             end_call = True
             guardian_note = "Patient confirmed taking the medication just now."
-    elif any(word in latest_msg for word in ["later", "minutes", "snooze", "hour", "call me back"]):
+    elif any(word in latest_msg for word in ["later", "minutes", "snooze", "hour", "call me back", "बाद में", "मिनट", "घंटे", "फिर से फोन", "बाद में फोन", "baad me", "baad mein", "ghante", "baad me call", "baad mein call"]):
         outcome = "SNOOZE"
-        spoken_reply = "No problem at all! I will call you back in a little bit so you can take it then."
+        if lang == "Hindi":
+            spoken_reply = "कोई बात नहीं! मैं कुछ समय बाद आपको फिर से फोन करूँगी ताकि आप इसे ले सकें।"
+        elif lang == "Hinglish":
+            spoken_reply = "Koi baat nahi! Main thodi der mein aapko phir se call karungi taaki aap tab le sakein."
+        else:
+            spoken_reply = "No problem at all! I will call you back in a little bit so you can take it then."
         end_call = True
         guardian_note = "Patient requested a snooze / call back."
-    elif any(word in latest_msg for word in ["don't want", "no", "refuse", "won't", "stop", "hate", "nahi"]):
+    elif any(word in latest_msg for word in ["don't want", "no", "refuse", "won't", "stop", "hate", "nahi", "नहीं लेनी", "नहीं खाना", "नहीं खाऊंगा", "नहीं खाऊंगी", "मना", "बंद करो", "nahi leni", "nahi khana", "nahi khaunga", "nahi khaungi", "nahi lena"]):
         outcome = "REFUSED"
-        spoken_reply = "I understand you feel that way, dear, but these are important. I will let your guardian know so they can check in on you."
+        if lang == "Hindi":
+            spoken_reply = "मैं समझती हूँ, लेकिन यह दवाएँ महत्वपूर्ण हैं। मैं आपके अभिभावक को बता दूँगी ताकि वे आपकी जाँच कर सकें।"
+        elif lang == "Hinglish":
+            spoken_reply = "Main samajhti hoon dear, par ye medicines important hain. Main aapke guardian ko bata deti hoon taaki wo check kar lein."
+        else:
+            spoken_reply = "I understand you feel that way, dear, but these are important. I will let your guardian know so they can check in on you."
         end_call = True
         guardian_note = "Patient refused to take their medication."
-    elif any(word in latest_msg for word in ["who", "what", "where", "scared", "confuse"]):
+    elif any(word in latest_msg for word in ["who", "what", "where", "scared", "confuse", "कौन", "क्या", "कहाँ", "डर", "असमंजस", "kaun", "kaun bol raha", "kya", "kahan", "darr", "darr lag raha"]):
         outcome = "CONFUSED"
-        spoken_reply = "Don't worry, dear, it's just MedRemind calling to help you with your pills. I'll let your family know to call you shortly."
+        if lang == "Hindi":
+            spoken_reply = "चिंता न करें, यह सिर्फ आपकी मदद के लिए मेडरिमाइंड है। मैं जल्द ही आपके परिवार को फोन करने के लिए कहूँगी।"
+        elif lang == "Hinglish":
+            spoken_reply = "Chinta mat karein dear, ye MedRemind hai jo aapko pills lene mein help karne ke liye call kar raha hai. Main family ko bolti hoon aapko call karne ke liye."
+        else:
+            spoken_reply = "Don't worry, dear, it's just MedRemind calling to help you with your pills. I'll let your family know to call you shortly."
         end_call = True
         guardian_note = "Patient sounded confused or did not recognize the system."
-    elif any(word in latest_msg for word in ["dizzy", "hurt", "pain", "sick", "vomit", "dreadful", "bad"]):
+    elif any(word in latest_msg for word in ["dizzy", "hurt", "pain", "sick", "vomit", "dreadful", "bad", "चक्कर", "दर्द", "बीमार", "उल्टी", "तबीयत खराब", "chakkar", "beemar", "tabiyat kharab", "kharaab"]):
         outcome = "MEDICAL_CONCERN"
-        spoken_reply = "Oh dear, I'm so sorry you're feeling unwell! Please sit down or lie down, and I will alert your guardian right away to help you."
+        if lang == "Hindi":
+            spoken_reply = "अरे, मुझे बहुत दुख है कि आप अस्वस्थ महसूस कर रहे हैं! कृपया बैठें या लेट जाएँ, और मैं तुरंत आपके अभिभावक को सूचित करूँगी।"
+        elif lang == "Hinglish":
+            spoken_reply = "Oh dear, mujhe afsos hai ki aap theek nahi hain. Please aap baith jaiye ya let jaiye, main guardian ko inform karti hoon."
+        else:
+            spoken_reply = "Oh dear, I'm so sorry you're feeling unwell! Please sit down or lie down, and I will alert your guardian right away to help you."
         end_call = True
         guardian_note = "URGENT: Patient reported feeling unwell or experiencing medical issues."
 
@@ -286,13 +343,19 @@ def _mock_llm_response(messages: list, response_json: bool) -> str:
 
 class AdherenceAgent:
     """Manages the conversation state and history with a single patient."""
-    def __init__(self, patient_name: str, medication: str, dosage: str):
+    def __init__(self, patient_name: str, medication: str, dosage: str, preferred_language: str = "English"):
         self.patient_name = patient_name
         self.medication = medication
         self.dosage = dosage
+        self.preferred_language = preferred_language
         
         custom_system = SYSTEM_PROMPT + f"\nToday, you are reminding {patient_name} to take their medication: {medication} (Dosage: {dosage})."
         
+        if self.preferred_language == "Hindi":
+            custom_system += "\nCRITICAL: The patient prefers to speak in Hindi. You MUST speak entirely in warm, slow, clear Hindi (using Devanagari script). The patient will reply in Hindi. However, your JSON output fields 'outcome' and 'guardian_note' MUST be strictly in English, and 'outcome' must be one of the specified English outcome tags."
+        elif self.preferred_language == "Hinglish":
+            custom_system += "\nCRITICAL: The patient prefers to speak in Hinglish (Hindi written in Latin script). You MUST speak entirely in warm, slow, clear Hinglish (e.g. 'Maine aapko call kiya hai medicine lene ke liye'). The patient will reply in Hinglish. However, your JSON output fields 'outcome' and 'guardian_note' MUST be strictly in English, and 'outcome' must be one of the specified English outcome tags."
+            
         self.history = [
             {"role": "system", "content": custom_system}
         ]
@@ -300,7 +363,13 @@ class AdherenceAgent:
         self.turn_count = 0
 
     def start_call(self) -> str:
-        greeting = f"Hello {self.patient_name}, this is your helper calling. It is time to take your {self.medication}, dosage {self.dosage}. Have you taken it yet?"
+        if self.preferred_language == "Hindi":
+            greeting = f"नमस्ते {self.patient_name}, मैं आपकी सहायक बोल रही हूँ। यह आपकी दवाई {self.medication} (खुराक {self.dosage}) लेने का समय है। क्या आपने इसे ले लिया है?"
+        elif self.preferred_language == "Hinglish":
+            greeting = f"Hello {self.patient_name}, main aapki helper bol rahi hoon. Aapki medicine {self.medication} (dosage {self.dosage}) lene ka time ho gaya hai. Kya aapne ise le liya hai?"
+        else:
+            greeting = f"Hello {self.patient_name}, this is your helper calling. It is time to take your {self.medication}, dosage {self.dosage}. Have you taken it yet?"
+            
         self.history.append({"role": "assistant", "content": greeting})
         self.transcript.append({"role": "Agent", "text": greeting})
         return greeting
@@ -312,7 +381,7 @@ class AdherenceAgent:
             return 0.0
             
         # Standard short clear answers are perfectly coherent
-        if clean_text in ["yes", "taken", "haan", "le liya", "no", "nahi", "snooze", "theek hai"]:
+        if clean_text in ["yes", "taken", "haan", "le liya", "no", "nahi", "snooze", "theek hai", "ji haan", "le li", "kha li", "kha kiya", "kha liya", "le liya", "na", "haan ji", "haanjee", "हाँ", "हाँ जी", "ले ली", "खा ली", "ले लिया", "नहीं", "नहीं लेनी"]:
             return 1.0
             
         try:
@@ -337,7 +406,7 @@ class AdherenceAgent:
                 
             return max(0.1, min(1.0, score))
         except Exception:
-            coherent_keywords = ["yes", "took", "had", "breakfast", "later", "minutes", "no", "refuse", "who", "what", "dizzy", "hurt", "pain", "taken", "dear", "haan", "le liya", "nahi"]
+            coherent_keywords = ["yes", "took", "had", "breakfast", "later", "minutes", "no", "refuse", "who", "what", "dizzy", "hurt", "pain", "taken", "dear", "haan", "le liya", "nahi", "हाँ", "ले", "खा", "नहीं", "कौन", "दर्द", "चक्कर"]
             matches = sum(1 for kw in coherent_keywords if kw in clean_text)
             score = matches / max(1, len(clean_text.split()))
             return max(0.1, min(1.0, score))
@@ -440,31 +509,65 @@ class AdherenceAgent:
         return call_llm(summary_prompt, response_json=False)
 
 
-def generate_patient_reply(patient_name: str, medication: str, dosage: str, last_agent_speech: str) -> str:
+def generate_patient_reply(patient_name: str, medication: str, dosage: str, last_agent_speech: str, preferred_language: str = "English") -> str:
     """Simulates a patient's response using LLM (or mock fallbacks) for automated background runs."""
     if not HAS_KEYS:
         # Graceful random offline mock fallback with new chaos personas
-        replies = [
-            f"Yes, I just took my {medication} with water.",
-            f"I already had it with my breakfast earlier, dear.",
-            "Can you call me back in 15 minutes? I am watching my favorite show right now.",
-            f"No, I don't want to take this {medication} pill today.",
-            "Who is this? What pills are you talking about?",
-            "I'm feeling very dizzy and my head hurts.",
-            "What? What did you say? What?",
-            "Stop calling me! I am hanging up now!",
-            "",  # Silent patient
-            "The weather is very nice today, the mailman brought some nice flowers." # Wandering patient
-        ]
+        if preferred_language == "Hindi":
+            replies = [
+                f"हाँ बेटा, मैंने अपनी {medication} पानी के साथ ले ली है।",
+                f"मैंने सुबह नाश्ते के साथ इसे पहले ही ले लिया था।",
+                "क्या आप मुझे 15 मिनट में फिर से फोन कर सकते हैं? मैं अभी अपना पसंदीदा टीवी शो देख रही हूँ।",
+                f"नहीं, मुझे आज यह {medication} की गोली नहीं खानी।",
+                "कौन बोल रहा है? आप किस गोली की बात कर रहे हैं?",
+                "मुझे बहुत चक्कर आ रहे हैं और मेरा सिर दर्द कर रहा है।",
+                "क्या? आपने क्या कहा? क्या?",
+                "मुझे बार-बार फोन करना बंद करो! मैं अभी फोन रख रही हूँ!",
+                "",  # Silent patient
+                "आज मौसम बहुत अच्छा है, डाकिया कुछ सुंदर फूल लाया है।" # Wandering patient
+            ]
+        elif preferred_language == "Hinglish":
+            replies = [
+                f"Haan beta, maine apni {medication} paani ke saath le li hai.",
+                f"Maine subah nashte ke saath ise pehle hi le liya tha, dear.",
+                "Kya aap mujhe 15 minutes mein phir se call kar sakte hain? Main abhi apna favourite show dekh rahi hoon.",
+                f"Nahi, mujhe aaj ye {medication} ki goli nahi khani.",
+                "Kaun bol raha hai? Aap kis goli ki baat kar rahe hain?",
+                "Mujhe bahut chakkar aa rahe hain aur mera sir dard kar raha hai.",
+                "Kya? Aapne kya kaha? Kya?",
+                "Mujhe baar-baar call karna band karo! Main abhi phone rakh rahi hoon!",
+                "",  # Silent patient
+                "Aaj mausam bahut accha hai, postman bahut sundar phool laya hai." # Wandering patient
+            ]
+        else:
+            replies = [
+                f"Yes, I just took my {medication} with water.",
+                f"I already had it with my breakfast earlier, dear.",
+                "Can you call me back in 15 minutes? I am watching my favorite show right now.",
+                f"No, I don't want to take this {medication} pill today.",
+                "Who is this? What pills are you talking about?",
+                "I'm feeling very dizzy and my head hurts.",
+                "What? What did you say? What?",
+                "Stop calling me! I am hanging up now!",
+                "",  # Silent patient
+                "The weather is very nice today, the mailman brought some nice flowers." # Wandering patient
+            ]
         return random.choice(replies)
 
     system_prompt = f"""You are simulating an elderly patient named {patient_name} who is being called by an AI caregiver reminder to take their {medication} ({dosage}).
 
 Based on the caregiver's statement, reply as {patient_name}. Speak slowly, in short sentences.
+"""
 
+    if preferred_language == "Hindi":
+        system_prompt += "\nYou MUST reply entirely in Devanagari Hindi (using Devanagari script). Your reply should sound like an elderly Indian person speaking Hindi.\n"
+    elif preferred_language == "Hinglish":
+        system_prompt += "\nYou MUST reply entirely in Hinglish (Hindi written in Latin script, e.g. 'Haan beta, maine le liya'). Your reply should sound like an elderly Indian person speaking Hinglish.\n"
+
+    system_prompt += """
 Choose ONE of these random personas for this call:
-1. Cooperative: Takes the pill immediately (e.g. "Yes, I am taking it now dear").
-2. Took it already: Took it earlier with breakfast or lunch (e.g. "I already took it with breakfast").
+1. Cooperative: Takes the pill immediately (e.g. "Yes, I am taking it now dear" or Hinglish "Haan beta, abhi le leti hoon").
+2. Took it already: Took it earlier with breakfast or lunch.
 3. Forgetful/Snooze: Asks to call back in 10 or 15 minutes.
 4. Uncooperative/Refused: Dislikes the pill or refuses it.
 5. Confused: Asks who is calling and what pills.
@@ -484,7 +587,14 @@ Your output MUST be ONLY the spoken text of the patient. Keep it short, natural,
     try:
         reply = call_llm(prompt, response_json=False)
         reply = re.sub(r'^["\']|["\']$', '', reply.strip())
-        return reply if reply else "Yes, I am here dear."
+        if not reply:
+            return ""
+        return reply
     except Exception:
-        return "Yes, I just took it dear."
+        if preferred_language == "Hindi":
+            return "हाँ जी, मैंने अभी ले ली।"
+        elif preferred_language == "Hinglish":
+            return "Haan ji, maine abhi le li."
+        else:
+            return "Yes, I just took it dear."
 

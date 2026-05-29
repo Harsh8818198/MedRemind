@@ -28,11 +28,11 @@ def save_reminders(reminders: list):
     with _storage_lock:
         database.save_reminders(reminders)
 
-def add_reminder(patient: str, medication: str, dosage: str, time_str: str) -> dict:
+def add_reminder(patient: str, medication: str, dosage: str, time_str: str, preferred_language: str = "English") -> dict:
     """Add a reminder to SQLite database."""
     init_storage()
     with _storage_lock:
-        return database.add_reminder(patient, medication, dosage, time_str)
+        return database.add_reminder(patient, medication, dosage, time_str, preferred_language)
 
 def delete_reminder(reminder_id: str) -> bool:
     """Delete a reminder by ID in SQLite database."""
