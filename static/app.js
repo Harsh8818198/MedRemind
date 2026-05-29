@@ -8,6 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initModalControls();
     initTabSwitcher();
     initEscalationModal();
+    initMockupBindings();
     loadDashboardData();
     
     // Quick Test Call listener
@@ -44,39 +45,47 @@ async function loadReminders() {
         cachedReminders = reminders;
         
         // Update metric counts
-        document.getElementById("metric-reminders").innerText = reminders.length;
+        const remindersCountEl = document.getElementById("metric-reminders");
+        if (remindersCountEl) {
+            remindersCountEl.innerText = reminders.length;
+        }
         
-        // 1. Render Dashboard Table Preview
-        if (reminders.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="6" class="table-empty">
-                        No active reminders scheduled. Use '+ Add Medication' to create one!
-                    </td>
-                </tr>`;
-        } else {
-            tbody.innerHTML = "";
-            reminders.forEach(r => {
-                const tr = document.createElement("tr");
-                tr.innerHTML = `
-                    <td><strong>${escapeHtml(r.patient)}</strong></td>
-                    <td><span class="badge">${escapeHtml(r.medication)}</span></td>
-                    <td>${escapeHtml(r.dosage)}</td>
-                    <td><strong style="color:var(--clr-blue);">${r.time}</strong></td>
-                    <td><span class="text-secondary">${r.next_run}</span></td>
-                    <td>
-                        <div class="actions">
-                            <button class="btn btn-secondary btn-sm" onclick="triggerSimulatedCall('${r.id}')"><i data-lucide="phone"></i> Call</button>
-                            <button class="btn btn-secondary btn-sm btn-danger" onclick="deleteReminder('${r.id}')"><i data-lucide="trash-2"></i></button>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
+        // 1. Render Dashboard Table Preview (if element exists)
+        if (tbody) {
+            if (reminders.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="table-empty">
+                            No active reminders scheduled. Use '+ Add Medication' to create one!
+                        </td>
+                    </tr>`;
+            } else {
+                tbody.innerHTML = "";
+                reminders.forEach(r => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td><strong>${escapeHtml(r.patient)}</strong></td>
+                        <td><span class="badge">${escapeHtml(r.medication)}</span></td>
+                        <td>${escapeHtml(r.dosage)}</td>
+                        <td><strong style="color:var(--clr-blue);">${r.time}</strong></td>
+                        <td><span class="text-secondary">${r.next_run}</span></td>
+                        <td>
+                            <div class="actions">
+                                <button class="btn btn-secondary btn-sm" onclick="triggerSimulatedCall('${r.id}')"><i data-lucide="phone"></i> Call</button>
+                                <button class="btn btn-secondary btn-sm btn-danger" onclick="deleteReminder('${r.id}')"><i data-lucide="trash-2"></i></button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
         }
         
         // 2. Render Full-width Scheduler Board View
         renderScheduleBoard(reminders);
+        
+        // 3. Render Dashboard Naye Cozy Schedule Panel
+        renderTodayScheduleList();
         
         // Dynamic Lucide rendering
         if (window.lucide) {
@@ -85,8 +94,113 @@ async function loadReminders() {
         
     } catch (err) {
         console.error("Error fetching reminders schedule:", err);
-        tbody.innerHTML = `<tr><td colspan="6" class="table-empty text-red">Failed to load schedule.</td></tr>`;
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="6" class="table-empty text-red">Failed to load schedule.</td></tr>`;
+        }
     }
+}
+
+// Helpers for Mockup Cozy Visuals
+function formatTime12h(timeStr) {
+    if (!timeStr) return "12:00 PM";
+    try {
+        const parts = timeStr.split(":");
+        const h = parseInt(parts[0]);
+        const m = parts[1];
+        const ampm = h >= 12 ? "PM" : "AM";
+        const h12 = h % 12 === 0 ? 12 : h % 12;
+        return `${h12}:${m} ${ampm}`;
+    } catch (e) {
+        return timeStr;
+    }
+}
+
+function getPatientAvatar(name) {
+    const key = (name || "").toLowerCase().trim();
+    if (key.includes("mom") || key.includes("mother")) {
+        return "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=120&auto=format&fit=crop";
+    } else if (key.includes("grandpa") || key.includes("father") || key.includes("dad") || key.includes("grandfather")) {
+        return "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=120&auto=format&fit=crop";
+    } else {
+        return "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=120&auto=format&fit=crop";
+    }
+}
+
+function getRelativeTime(timestamp) {
+    if (!timestamp) return "Just now";
+    try {
+        const diffMs = new Date() - new Date(timestamp);
+        const diffMins = Math.round(diffMs / 60000);
+        if (diffMins < 1) return "Just now";
+        if (diffMins < 60) return `${diffMins}m ago`;
+        const diffHrs = Math.round(diffMins / 60);
+        if (diffHrs < 24) return `${diffHrs}h ago`;
+        return new Date(timestamp).toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+    } catch (e) {
+        return "Just now";
+    }
+}
+
+function renderTodayScheduleList() {
+    const container = document.getElementById("schedule-list-items");
+    if (!container) return;
+    
+    container.innerHTML = "";
+    const todayStr = new Date().toISOString().substring(0, 10);
+    const todayLogs = cachedLogs.filter(l => l.timestamp && l.timestamp.startsWith(todayStr));
+    
+    if (cachedReminders.length === 0) {
+        container.innerHTML = `<div class="empty-list-text">No medication reminders scheduled for today.</div>`;
+        return;
+    }
+    
+    cachedReminders.forEach(r => {
+        const isTaken = todayLogs.some(l => l.reminder_id === r.id && ["TAKEN", "TAKEN_EARLIER"].includes(l.outcome));
+        const isCalling = activeSessionsStatusCheck(r.id);
+        
+        let statusBtn = "";
+        if (isTaken) {
+            statusBtn = `<span class="btn-status status-taken"><i data-lucide="check"></i> Taken</span>`;
+        } else if (isCalling) {
+            statusBtn = `<span class="btn-status status-calling">Calling...</span>`;
+        } else {
+            statusBtn = `<button class="btn-status status-upcoming" onclick="triggerSimulatedCall('${r.id}')">Calling...</button>`;
+        }
+        
+        const isNight = r.time >= "18:00" || r.time < "06:00";
+        const item = document.createElement("div");
+        item.className = "schedule-item-row";
+        item.innerHTML = `
+            <div class="schedule-time-box">
+                <i data-lucide="${isNight ? 'moon' : 'sun'}" class="time-ico"></i>
+                <span class="time-text">${formatTime12h(r.time)}</span>
+            </div>
+            <div class="schedule-med-info">
+                <span class="med-name">${escapeHtml(r.medication)} ${escapeHtml(r.dosage)}</span>
+                <span class="med-patient">1 Tablet</span>
+            </div>
+            <div class="schedule-status-action">
+                ${statusBtn}
+            </div>
+        `;
+        container.appendChild(item);
+    });
+}
+
+function activeSessionsStatusCheck(reminderId) {
+    if (typeof currentSession !== 'undefined' && currentSession && currentSession.session_id) {
+        // Simple check if simulator active
+        const simModal = document.getElementById("call-sim-modal");
+        if (simModal && simModal.classList.contains("active")) {
+            // Find active scheduled reminder
+            const boardRows = document.querySelectorAll("#reminders-tbody tr");
+            // Check if matches active session
+            if (currentSession.medication && cachedReminders.some(r => r.id === reminderId && r.medication === currentSession.medication)) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 function renderScheduleBoard(reminders) {
@@ -140,62 +254,54 @@ async function loadLogs() {
         const data = await response.json();
         cachedLogs = data.logs;
         
-        // Update statistical Metrics cards
+        // 1. Calculate and update cozy mockup Statistics panel
+        updateMockupStats();
+        
+        // Update standard metric counts if elements exist
         const m = data.metrics;
-        document.getElementById("metric-calls").innerText = m.total_calls;
-        document.getElementById("metric-adherence").innerText = m.adherence_rate;
+        const totalCallsEl = document.getElementById("metric-calls");
+        if (totalCallsEl) totalCallsEl.innerText = m.total_calls;
         
-        // Highlight adherence score color based on performance thresholds
-        const adherenceCard = document.getElementById("metric-adherence-card");
-        adherenceCard.className = "stat-card";
-        if (m.adherence_rate >= 80) adherenceCard.classList.add("card-glow-green");
-        else if (m.adherence_rate >= 50) adherenceCard.classList.add("card-glow-blue");
-        else adherenceCard.classList.add("card-glow-amber");
+        const adherenceEl = document.getElementById("metric-adherence");
+        if (adherenceEl) adherenceEl.innerText = m.adherence_rate;
         
-        // Compile alerts (Medical concerns, failures, or refusals)
-        let alertCount = 0;
-        const feedCount = document.getElementById("feed-count");
-        feedCount.innerText = `${data.logs.length} Sessions`;
+        // 2. Render Cozy mockup Recent Activity panel
+        renderRecentActivityList(data.logs);
         
-        // 1. Render Dashboard Live Feed Preview
-        if (data.logs.length === 0) {
-            logsFeed.innerHTML = `<div class="feed-empty">No activity logs recorded yet.</div>`;
-            document.getElementById("metric-alerts").innerText = 0;
-            if (logsTbody) {
-                logsTbody.innerHTML = `<tr><td colspan="6" class="table-empty">No call logs recorded.</td></tr>`;
+        // 3. Render Standard Dashboard Live Feed Preview (backward compatibility fallback)
+        if (logsFeed) {
+            if (data.logs.length === 0) {
+                logsFeed.innerHTML = `<div class="feed-empty">No activity logs recorded yet.</div>`;
+            } else {
+                logsFeed.innerHTML = "";
+                const previewLogs = data.logs.slice(0, 5);
+                previewLogs.forEach(log => {
+                    const out = log.outcome;
+                    const isAlert = ["MEDICAL_CONCERN", "REFUSED", "CONFUSED", "NO_RESPONSE_FAILED"].includes(out);
+                    const item = document.createElement("div");
+                    item.className = "feed-item";
+                    if (out === "MEDICAL_CONCERN" || out === "NO_RESPONSE_FAILED" || out === "REFUSED") {
+                        item.classList.add("alert-concern");
+                    }
+                    
+                    const timeFormatted = log.timestamp ? log.timestamp.substring(11, 16) : "12:00";
+                    const outcomeBadgeClass = getOutcomeBadgeClass(out);
+                    
+                    item.innerHTML = `
+                        <div class="feed-header">
+                            <span class="feed-meta"><strong>${escapeHtml(log.patient)}</strong> : ${escapeHtml(log.medication)}</span>
+                            <span class="feed-time">${timeFormatted}</span>
+                        </div>
+                        <p class="feed-desc">${escapeHtml(log.summary)}</p>
+                        <div class="feed-header">
+                            <span class="badge-outcome ${outcomeBadgeClass}">${out.replace("_", " ")}</span>
+                            ${isAlert ? `<span style="font-size: 11px; color: var(--clr-red); font-weight:600; display:inline-flex; align-items:center; gap:4px;"><i data-lucide="alert-circle" style="width:12px; height:12px; stroke-width:2.5px;"></i> Escalated</span>` : ""}
+                        </div>
+                    `;
+                    logsFeed.appendChild(item);
+                });
             }
-            return;
         }
-        
-        logsFeed.innerHTML = "";
-        const previewLogs = data.logs.slice(0, 5); // Show latest 5 on dashboard feed
-        previewLogs.forEach(log => {
-            const out = log.outcome;
-            const isAlert = ["MEDICAL_CONCERN", "REFUSED", "CONFUSED", "NO_RESPONSE_FAILED"].includes(out);
-            if (isAlert) alertCount++;
-            
-            const item = document.createElement("div");
-            item.className = "feed-item";
-            if (out === "MEDICAL_CONCERN" || out === "NO_RESPONSE_FAILED" || out === "REFUSED") {
-                item.classList.add("alert-concern");
-            }
-            
-            const timeFormatted = log.timestamp ? log.timestamp.substring(11, 16) : "12:00";
-            const outcomeBadgeClass = getOutcomeBadgeClass(out);
-            
-            item.innerHTML = `
-                <div class="feed-header">
-                    <span class="feed-meta"><strong>${escapeHtml(log.patient)}</strong> : ${escapeHtml(log.medication)}</span>
-                    <span class="feed-time">${timeFormatted}</span>
-                </div>
-                <p class="feed-desc">${escapeHtml(log.summary)}</p>
-                <div class="feed-header">
-                    <span class="badge-outcome ${outcomeBadgeClass}">${out.replace("_", " ")}</span>
-                    ${isAlert ? `<span style="font-size: 11px; color: var(--clr-red); font-weight:600; display:inline-flex; align-items:center; gap:4px;"><i data-lucide="alert-circle" style="width:12px; height:12px; stroke-width:2.5px;"></i> Escalated</span>` : ""}
-                </div>
-            `;
-            logsFeed.appendChild(item);
-        });
         
         // Compile full list for total metrics
         let totalAlerts = 0;
@@ -204,9 +310,10 @@ async function loadLogs() {
                 totalAlerts++;
             }
         });
-        document.getElementById("metric-alerts").innerText = totalAlerts;
+        const alertsEl = document.getElementById("metric-alerts");
+        if (alertsEl) alertsEl.innerText = totalAlerts;
         
-        // 2. Render Full-width Audit Log View
+        // 4. Render Full-width Audit Log View
         renderLogsBoard(data.logs);
         
         // Dynamic Lucide rendering
@@ -1207,4 +1314,185 @@ function initEscalationModal() {
         }
     });
 }
+
+// ==========================================================================
+// 8. Gold-Cozy Mockup Visual Controllers & Sparkline Drawer
+// ==========================================================================
+
+function updateMockupStats() {
+    const totalEl = document.getElementById("metric-reminders-total");
+    const completedEl = document.getElementById("metric-reminders-completed");
+    const completedPctEl = document.getElementById("metric-reminders-completed-pct");
+    const missedEl = document.getElementById("metric-reminders-missed");
+    const missedPctEl = document.getElementById("metric-reminders-missed-pct");
+    const pendingEl = document.getElementById("metric-reminders-pending");
+    const pendingPctEl = document.getElementById("metric-reminders-pending-pct");
+    
+    if (!totalEl) return; // Mockup view not active/visible
+    
+    const todayStr = new Date().toISOString().substring(0, 10);
+    const todayLogs = cachedLogs.filter(l => l.timestamp && l.timestamp.startsWith(todayStr));
+    
+    const completed = todayLogs.filter(l => ["TAKEN", "TAKEN_EARLIER"].includes(l.outcome)).length;
+    const missed = todayLogs.filter(l => ["REFUSED", "NO_RESPONSE_FAILED", "MEDICAL_CONCERN", "CONFUSED"].includes(l.outcome)).length;
+    
+    const total = cachedReminders.length + completed + missed;
+    const pending = Math.max(0, cachedReminders.length);
+    
+    totalEl.innerText = total;
+    completedEl.innerText = completed;
+    completedPctEl.innerText = total > 0 ? `${Math.round((completed / total) * 100)}%` : "0%";
+    
+    missedEl.innerText = missed;
+    missedPctEl.innerText = total > 0 ? `${Math.round((missed / total) * 100)}%` : "0%";
+    
+    pendingEl.innerText = pending;
+    pendingPctEl.innerText = total > 0 ? `${Math.round((pending / total) * 100)}%` : "0%";
+    
+    // Draw mini sparks sparkline
+    drawMiniInsightChart();
+    
+    // Sync text
+    const statsTextEl = document.getElementById("insight-stats-text");
+    if (statsTextEl && total > 0) {
+        statsTextEl.innerText = `Great job! ${Math.round((completed / total) * 100)}% medications completed today.`;
+    }
+}
+
+function renderRecentActivityList(logs) {
+    const container = document.getElementById("dashboard-recent-activities");
+    if (!container) return;
+    
+    container.innerHTML = "";
+    const preview = logs.slice(0, 3); // Get top 3
+    
+    if (preview.length === 0) {
+        container.innerHTML = `<div class="empty-list-text">No recent patient activities logged.</div>`;
+        return;
+    }
+    
+    preview.forEach(log => {
+        const avatar = getPatientAvatar(log.patient);
+        const relTime = getRelativeTime(log.timestamp);
+        const out = log.outcome;
+        
+        let statusTag = "";
+        if (["TAKEN", "TAKEN_EARLIER"].includes(out)) {
+            statusTag = `<span class="activity-status tag-success">Completed</span>`;
+        } else if (["NO_RESPONSE", "SNOOZE"].includes(out)) {
+            statusTag = `<span class="activity-status tag-progress">In Progress</span>`;
+        } else {
+            statusTag = `<span class="activity-status tag-failed">${out.replace("_", " ")}</span>`;
+        }
+        
+        const item = document.createElement("div");
+        item.className = "activity-item-row";
+        item.innerHTML = `
+            <img src="${avatar}" alt="${escapeHtml(log.patient)}" class="patient-avatar-circle">
+            <div class="activity-details">
+                <div class="activity-detail-header">
+                    <span class="activity-p-name">${escapeHtml(log.patient)}</span>
+                    ${statusTag}
+                </div>
+                <span class="activity-description">${escapeHtml(log.medication)} ${escapeHtml(log.dosage)} - ${formatTime12h(log.scheduled_time)}</span>
+                <span class="activity-agent-speech">${escapeHtml(log.summary)}</span>
+            </div>
+            <span class="activity-time-lbl">${relTime}</span>
+        `;
+        container.appendChild(item);
+    });
+}
+
+function drawMiniInsightChart() {
+    const canvas = document.getElementById("miniInsightChart");
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext("2d");
+    
+    // Auto-adjust scale
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = 60 * window.devicePixelRatio;
+    canvas.height = 35 * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    
+    ctx.clearRect(0, 0, 60, 35);
+    
+    ctx.strokeStyle = "#c5a059";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    
+    ctx.beginPath();
+    ctx.moveTo(5, 30);
+    ctx.lineTo(15, 20);
+    ctx.lineTo(25, 25);
+    ctx.lineTo(35, 10);
+    ctx.lineTo(45, 15);
+    ctx.lineTo(55, 5);
+    ctx.stroke();
+    
+    ctx.fillStyle = "#c5a059";
+    ctx.beginPath();
+    ctx.arc(55, 5, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(55, 5, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+function initMockupBindings() {
+    // Nav viewall schedule
+    const navSchedBtn = document.getElementById("nav-to-schedule-tab");
+    if (navSchedBtn) {
+        navSchedBtn.onclick = () => {
+            const schedTab = document.getElementById("nav-reminders");
+            if (schedTab) schedTab.click();
+        };
+    }
+    
+    // Nav viewall activity
+    const navActivityBtn = document.getElementById("nav-to-logs-tab");
+    if (navActivityBtn) {
+        navActivityBtn.onclick = () => {
+            const activityTab = document.getElementById("nav-activity");
+            if (activityTab) activityTab.click();
+        };
+    }
+    
+    // Quick Add Reminder button
+    const quickAddBtn = document.getElementById("btn-quick-add-reminder");
+    if (quickAddBtn) {
+        quickAddBtn.onclick = () => {
+            const addBtn = document.getElementById("btn-open-add-modal");
+            if (addBtn) addBtn.click();
+        };
+    }
+    
+    // Quick Place Call button
+    const quickCallBtn = document.getElementById("btn-quick-place-call");
+    if (quickCallBtn) {
+        quickCallBtn.onclick = () => {
+            triggerSimulatedCall("mock-test");
+        };
+    }
+    
+    // Quick View Patients button
+    const quickPatientsBtn = document.getElementById("btn-quick-view-patients");
+    if (quickPatientsBtn) {
+        quickPatientsBtn.onclick = () => {
+            alert("Patient profile cards: Grandpa (adherence high), Mom (adherence medium).");
+        };
+    }
+    
+    // Quick Reports button
+    const quickReportsBtn = document.getElementById("btn-quick-reports");
+    if (quickReportsBtn) {
+        quickReportsBtn.onclick = () => {
+            const insightsTab = document.getElementById("nav-insights");
+            if (insightsTab) insightsTab.click();
+        };
+    }
+}
+
 

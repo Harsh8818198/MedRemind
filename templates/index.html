@@ -24,34 +24,49 @@
     <div class="ambient-glow bg-glow-purple" aria-hidden="true"></div>
 
     <div class="app-container">
-        <!-- Sidebar Navigation -->
+        <!-- Sidebar Navigation (Mockup Gold-Cozy Style) -->
         <aside class="sidebar" id="sidebar-nav">
             <div class="brand">
                 <div class="brand-logo">
-                    <i data-lucide="activity" class="brand-logo-icon"></i>
+                    <i data-lucide="heart" class="brand-logo-icon"></i>
                 </div>
-                <span class="brand-name">MedRemind</span>
+                <div class="brand-text-group">
+                    <span class="brand-name">MedRemind</span>
+                    <span class="brand-tagline">We care. You rest easy.</span>
+                </div>
             </div>
             
             <nav class="nav-menu" aria-label="Main Navigation">
                 <a href="#" class="nav-item active" id="nav-dashboard" aria-current="page">
-                    <i data-lucide="layout-dashboard"></i> Dashboard
-                </a>
-                <a href="#" class="nav-item" id="nav-insights">
-                    <i data-lucide="brain-circuit"></i> Insights
+                    <i data-lucide="home"></i> Overview
                 </a>
                 <a href="#" class="nav-item" id="nav-reminders">
-                    <i data-lucide="calendar-clock"></i> Schedule
+                    <i data-lucide="calendar"></i> Schedule
                 </a>
                 <a href="#" class="nav-item" id="nav-activity">
-                    <i data-lucide="list-checks"></i> Activity Log
+                    <i data-lucide="clipboard-list"></i> Activity Logs
+                </a>
+                <a href="#" class="nav-item" id="nav-insights">
+                    <i data-lucide="trending-up"></i> Insights
+                </a>
+                <a href="#" class="nav-item" id="nav-patients">
+                    <i data-lucide="users"></i> Patients
+                </a>
+                <a href="#" class="nav-item" id="nav-settings">
+                    <i data-lucide="settings"></i> Settings
+                </a>
+                <a href="#" class="nav-item" id="nav-help">
+                    <i data-lucide="help-circle"></i> Help & Support
                 </a>
             </nav>
             
             <div class="sidebar-footer">
-                <div class="system-status" aria-live="polite">
-                    <span class="status-indicator online" id="system-status-indicator"></span>
-                    <span class="status-text" id="system-status-text">Scheduler Active</span>
+                <div class="user-profile-section">
+                    <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=150&auto=format&fit=crop" alt="Priya Sharma" class="user-avatar">
+                    <div class="user-info">
+                        <span class="user-name">Priya Sharma <i data-lucide="chevron-down" class="profile-chevron"></i></span>
+                        <span class="user-role">Primary Caregiver</span>
+                    </div>
                 </div>
             </div>
         </aside>
@@ -61,7 +76,7 @@
             <!-- Header -->
             <header class="main-header">
                 <div class="header-info">
-                    <h1 id="view-title">Care Portal</h1>
+                    <h1 id="view-title">Overview</h1>
                     <p class="header-subtitle" id="view-subtitle">Real-time medication adherence & proactive patient diagnostics</p>
                 </div>
                 
@@ -76,111 +91,150 @@
                  VIEW 1: CORE DASHBOARD PREVIEW
                  ========================================== -->
             <div class="tab-view" id="view-dashboard">
-                <!-- Dashboard Analytics Grid -->
-                <section class="analytics-grid" aria-label="Metrics Statistics Overview">
-                    <!-- Adherence score card -->
-                    <div class="stat-card card-glow-green" id="metric-adherence-card" role="region" aria-labelledby="title-adherence">
-                        <div class="card-inner">
-                            <div class="stat-header">
-                                <span class="stat-title" id="title-adherence">Overall Adherence</span>
-                                <div class="stat-icon icon-green"><i data-lucide="trending-up"></i></div>
-                            </div>
-                            <div class="stat-value"><span id="metric-adherence">0</span>%</div>
-                            <p class="stat-desc">Doses successfully confirmed taken</p>
+                <div class="overview-layout">
+                    <!-- Left: Cozy Room Decorative Panel with Gold script -->
+                    <div class="cozy-panel" style="background-image: url('/static/cozy_corner.png');">
+                        <div class="cozy-overlay"></div>
+                        <div class="cozy-text-container">
+                            <p class="cozy-cursive">Every pill</p>
+                            <p class="cozy-cursive">Every call</p>
+                            <p class="cozy-cursive">Every day.</p>
+                            <p class="cozy-signature">we're there.</p>
                         </div>
                     </div>
-
-                    <!-- Active Reminders card -->
-                    <div class="stat-card card-glow-blue" id="metric-reminders-card" role="region" aria-labelledby="title-reminders">
-                        <div class="card-inner">
-                            <div class="stat-header">
-                                <span class="stat-title" id="title-reminders">Active Schedule</span>
-                                <div class="stat-icon icon-blue"><i data-lucide="clock"></i></div>
+                    
+                    <!-- Right: Main Dashboard Panel -->
+                    <div class="dashboard-panel">
+                        <!-- Header with Priya's Greeting & Top Quote Card -->
+                        <div class="dashboard-greeting-header">
+                            <div class="greeting-text">
+                                <h2>Good evening, <span class="cursive-name">Priya</span> <span class="heart-symbol">♡</span></h2>
+                                <p class="greeting-sub">Here's how things are going with your loved ones.</p>
                             </div>
-                            <div class="stat-value" id="metric-reminders">0</div>
-                            <p class="stat-desc">Configured daily scheduled pills</p>
-                        </div>
-                    </div>
-
-                    <!-- Total call checks card -->
-                    <div class="stat-card card-glow-purple" id="metric-checks-card" role="region" aria-labelledby="title-calls">
-                        <div class="card-inner">
-                            <div class="stat-header">
-                                <span class="stat-title" id="title-calls">Monitored Doses</span>
-                                <div class="stat-icon icon-purple"><i data-lucide="phone-call"></i></div>
-                            </div>
-                            <div class="stat-value" id="metric-calls">0</div>
-                            <p class="stat-desc">Call sessions reviewed by AI</p>
-                        </div>
-                    </div>
-
-                    <!-- Active alerts card -->
-                    <div class="stat-card card-glow-red" id="metric-alerts-card" role="region" aria-labelledby="title-alerts">
-                        <div class="card-inner">
-                            <div class="stat-header">
-                                <span class="stat-title" id="title-alerts">Caregiver Alerts</span>
-                                <div class="stat-icon icon-red"><i data-lucide="alert-triangle"></i></div>
-                            </div>
-                            <div class="stat-value" id="metric-alerts">0</div>
-                            <p class="stat-desc">Critical alerts requiring attention</p>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Double Column Content Layout -->
-                <div class="content-layout">
-                    <!-- Left Column: Reminders & Manager -->
-                    <section class="layout-main" id="reminders-section" aria-labelledby="header-reminders">
-                        <div class="section-card">
-                            <div class="card-header">
-                                <div class="title-with-desc">
-                                    <h2 id="header-reminders">Medication Schedule</h2>
-                                    <p class="card-desc">Active reminders currently monitored by the background clock</p>
+                            <div class="quote-card-header">
+                                <div class="quote-card-text">
+                                    <p class="quote-p">"Care is not just what we do,</p>
+                                    <p class="quote-p">it's who we are."</p>
                                 </div>
-                                <button class="btn btn-primary btn-sm btn-pill-add" id="btn-open-add-modal">
-                                    <i data-lucide="plus"></i> Add Medication
-                                </button>
-                            </div>
-                            
-                            <div class="table-container">
-                                <table class="data-table" id="reminders-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Patient</th>
-                                            <th>Medication</th>
-                                            <th>Dosage</th>
-                                            <th>Scheduled Time</th>
-                                            <th>Next Run</th>
-                                            <th>Adherence Risk</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="reminders-tbody">
-                                        <tr>
-                                            <td colspan="6" class="table-empty">
-                                                <div class="table-loader"></div>
-                                                Loading active schedule...
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                                <div class="quote-window-graphic"></div>
                             </div>
                         </div>
-                    </section>
 
-                    <!-- Right Column: Live Feed -->
-                    <section class="layout-side" id="activity-section" aria-labelledby="header-feed">
-                        <div class="section-card card-tall">
-                            <div class="card-header">
-                                <h2 id="header-feed">Caregiver Live Feed</h2>
-                                <span class="badge" id="feed-count">0 Sessions</span>
+                        <!-- Top Statistics Row Grid -->
+                        <section class="stats-row-grid" aria-label="Metrics Statistics Overview">
+                            <!-- Reminders Card -->
+                            <div class="mini-stat-card card-glow-gold" id="metric-adherence-card">
+                                <div class="mini-stat-info">
+                                    <span class="mini-stat-title">Today's Reminders</span>
+                                    <span class="mini-stat-value" id="metric-reminders-total">8</span>
+                                    <span class="mini-stat-desc">Total</span>
+                                </div>
+                                <div class="mini-stat-circle circle-gold"><i data-lucide="bell"></i></div>
                             </div>
                             
-                            <div class="activity-feed" id="activity-logs-container">
-                                <div class="feed-empty">No activity logs recorded yet.</div>
+                            <!-- Completed Card -->
+                            <div class="mini-stat-card card-glow-green" id="metric-reminders-card">
+                                <div class="mini-stat-info">
+                                    <span class="mini-stat-title">Completed</span>
+                                    <span class="mini-stat-value" id="metric-reminders-completed">6</span>
+                                    <span class="mini-stat-desc text-green" id="metric-reminders-completed-pct">75%</span>
+                                </div>
+                                <div class="mini-stat-circle circle-green"><i data-lucide="check"></i></div>
+                            </div>
+                            
+                            <!-- Missed Card -->
+                            <div class="mini-stat-card card-glow-red" id="metric-checks-card">
+                                <div class="mini-stat-info">
+                                    <span class="mini-stat-title">Missed</span>
+                                    <span class="mini-stat-value" id="metric-reminders-missed">1</span>
+                                    <span class="mini-stat-desc text-red" id="metric-reminders-missed-pct">12.5%</span>
+                                </div>
+                                <div class="mini-stat-circle circle-red"><i data-lucide="x"></i></div>
+                            </div>
+                            
+                            <!-- Pending Card -->
+                            <div class="mini-stat-card card-glow-blue" id="metric-alerts-card">
+                                <div class="mini-stat-info">
+                                    <span class="mini-stat-title">Pending</span>
+                                    <span class="mini-stat-value" id="metric-reminders-pending">1</span>
+                                    <span class="mini-stat-desc text-blue" id="metric-reminders-pending-pct">12.5%</span>
+                                </div>
+                                <div class="mini-stat-circle circle-blue"><i data-lucide="clock"></i></div>
+                            </div>
+                        </section>
+
+                        <!-- Two Column Grid for Schedule & Recent Activity -->
+                        <div class="dashboard-double-grid">
+                            <!-- Left: Today's Schedule -->
+                            <div class="dashboard-col-card">
+                                <div class="card-title-row">
+                                    <h3>Today's Schedule</h3>
+                                    <button class="btn-text-only" id="nav-to-schedule-tab">View all</button>
+                                </div>
+                                <div class="schedule-list-container" id="schedule-list-items">
+                                    <div class="empty-list-text">Loading active schedule...</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Right: Recent Activity -->
+                            <div class="dashboard-col-card">
+                                <div class="card-title-row">
+                                    <h3>Recent Activity</h3>
+                                    <button class="btn-text-only" id="nav-to-logs-tab">View all</button>
+                                </div>
+                                <div class="recent-activity-list" id="dashboard-recent-activities">
+                                    <div class="empty-list-text">Loading activity feed...</div>
+                                </div>
                             </div>
                         </div>
-                    </section>
+
+                        <!-- Bottom Rows: Insight, Note, and Quick Actions -->
+                        <div class="dashboard-triple-grid">
+                            <!-- Today's Insight -->
+                            <div class="dashboard-bottom-card">
+                                <h4>Today's Insight</h4>
+                                <div class="insight-content-box">
+                                    <div class="insight-chart-box">
+                                        <canvas id="miniInsightChart" style="width: 60px; height: 35px;"></canvas>
+                                    </div>
+                                    <div class="insight-text-box">
+                                        <p id="insight-stats-text">Great job! 75% medications completed today.</p>
+                                        <p class="insight-sub">Keep it up! 🎉</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- A little note for you -->
+                            <div class="dashboard-bottom-card text-center">
+                                <h4>A little note for you</h4>
+                                <p class="note-quote">"You are doing an amazing job. Small efforts, big difference."</p>
+                                <div class="glowing-heart-icon"><i data-lucide="heart" class="filled-heart"></i></div>
+                            </div>
+                            
+                            <!-- Quick Actions -->
+                            <div class="dashboard-bottom-card">
+                                <h4>Quick Actions</h4>
+                                <div class="quick-actions-btn-grid">
+                                    <button class="action-btn" id="btn-quick-add-reminder">
+                                        <i data-lucide="plus"></i>
+                                        <span>Add Reminder</span>
+                                    </button>
+                                    <button class="action-btn" id="btn-quick-place-call">
+                                        <i data-lucide="phone"></i>
+                                        <span>Place a Call</span>
+                                    </button>
+                                    <button class="action-btn" id="btn-quick-view-patients">
+                                        <i data-lucide="users"></i>
+                                        <span>View Patients</span>
+                                    </button>
+                                    <button class="action-btn" id="btn-quick-reports">
+                                        <i data-lucide="trending-up"></i>
+                                        <span>Reports</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
