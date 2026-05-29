@@ -328,6 +328,15 @@ def end_simulation():
     except Exception:
         risk_score = 0.15
 
+    # Calculate escalation tier using the clinical escalation engine
+    escalation_tier = 0
+    if outcome in ["REFUSED", "CONFUSED", "MEDICAL_CONCERN", "NO_RESPONSE_FAILED", "MEDICAL_EMERGENCY"]:
+        try:
+            import escalation
+            escalation_tier = escalation.escalate(reminder, outcome, custom_note=guardian_note)
+        except Exception as e:
+            print(f"[Simulate Escalation Error]: {e}")
+
     # Persist log entry
     storage.log_call(
         reminder_id=reminder_id,
@@ -342,7 +351,7 @@ def end_simulation():
         response_latency_sec=avg_latency,
         coherence_score=avg_coherence,
         risk_score=risk_score,
-        escalation_tier=0
+        escalation_tier=escalation_tier
     )
     
     # Clean memory store

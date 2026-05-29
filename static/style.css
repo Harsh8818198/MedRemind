@@ -2160,3 +2160,163 @@ audio::-webkit-media-controls-time-remaining-display {
     font-size: 11px !important;
 }
 
+/* ==========================================
+   Sliding Caregiver Notification Drawer
+   ========================================== */
+
+.notification-drawer {
+    position: fixed;
+    top: 0;
+    right: -360px; /* Initially hidden */
+    width: 340px;
+    height: 100vh;
+    background: rgba(11, 10, 9, 0.95);
+    border-left: 1px solid rgba(197, 160, 89, 0.18);
+    box-shadow: -10px 0 40px rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(20px);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    padding: 24px;
+}
+
+.notification-drawer.active {
+    right: 0; /* Slide in */
+}
+
+.drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+}
+
+.drawer-header h3 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--txt-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+
+.drawer-header h3 svg {
+    color: #F59E0B;
+}
+
+.btn-close-drawer {
+    background: transparent;
+    border: none;
+    color: var(--txt-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.btn-close-drawer:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--txt-primary);
+}
+
+.drawer-content {
+    flex-grow: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Alert Notification Bubble */
+.drawer-alert-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(197, 160, 89, 0.1);
+    border-radius: 16px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: all 0.25s ease;
+}
+
+.drawer-alert-card:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(197, 160, 89, 0.25);
+}
+
+.drawer-alert-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.drawer-alert-badge {
+    font-size: 9.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+}
+
+.drawer-alert-badge.badge-emergency {
+    background: rgba(244, 63, 94, 0.15);
+    color: #F43F5E;
+    border: 1px solid rgba(244, 63, 94, 0.25);
+}
+
+.drawer-alert-badge.badge-warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: #F59E0B;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.drawer-alert-time {
+    font-size: 11px;
+    color: var(--txt-muted);
+    font-weight: 600;
+}
+
+.drawer-alert-msg-container {
+    background: rgba(3, 7, 18, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.drawer-alert-msg {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 12.5px;
+    color: var(--txt-secondary);
+    line-height: 1.5;
+    white-space: pre-line;
+}
+
+.drawer-alert-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.drawer-alert-actions .btn {
+    flex: 1;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 8px;
+    text-align: center;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+

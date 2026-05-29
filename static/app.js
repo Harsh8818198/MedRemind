@@ -27,6 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
 // Local memory cache
 let cachedReminders = [];
 let cachedLogs = [];
+let lastSeenLogId = 0;
 
 function loadDashboardData() {
     loadReminders();
@@ -258,6 +259,22 @@ async function loadLogs() {
         const response = await fetch("/api/logs");
         const data = await response.json();
         cachedLogs = data.logs;
+        
+        // Scan for new escalation alerts to pop open sliding notification drawer
+        if (typeof lastSeenLogId !== 'undefined' && lastSeenLogId > 0 && data.logs.length > 0) {
+            const newEscalations = data.logs.filter(l => l.id > lastSeenLogId && l.escalation_tier >= 3);
+            newEscalations.forEach(log => {
+                triggerAlertDrawer(log);
+            });
+        }
+        
+        // Track the maximum log ID seen
+        if (data.logs.length > 0) {
+            const maxId = Math.max(...data.logs.map(l => l.id || 0));
+            if (typeof lastSeenLogId !== 'undefined') {
+                lastSeenLogId = maxId;
+            }
+        }
         
         // 1. Calculate and update cozy mockup Statistics panel
         updateMockupStats();
@@ -1324,6 +1341,15 @@ function initEscalationModal() {
             
             if (res.status === "success") {
                 close();
+                // Dynamically trigger sliding drawer alerts for offline demo flow!
+                const alertLog = {
+                    patient: payload.patient,
+                    medication: payload.medication,
+                    dosage: payload.dosage || "10mg",
+                    outcome: payload.outcome,
+                    guardian_note: payload.custom_note || "Test alert triggered from dashboard."
+                };
+                triggerAlertDrawer(alertLog);
                 loadInsightsData();
             } else {
                 alert(`Error: ${res.message}`);
@@ -1706,6 +1732,115 @@ function viewPatientInsights(patientName) {
 function loadInsightsDataForPatient(patientName) {
     currentInsightsPatient = patientName;
     loadInsightsData();
+}
+
+// ==========================================================================
+// 10. Sliding Caregiver Notification Drawer Controllers
+// ==========================================================================
+
+function triggerAlertDrawer(log) {
+    const drawer = document.getElementById("notification-drawer");
+    const content = document.getElementById("drawer-content");
+    if (!drawer || !content) return;
+    
+    // Play synthetic chime sound dynamically
+    playNotificationSound();
+    
+    // Determine outcomes and text
+    const patient = log.patient || "Patient";
+    const medication = log.medication || "Medication";
+    const dosage = log.dosage || "";
+    const outcome = log.outcome || "ALERT";
+    const note = log.guardian_note || log.custom_note || "No additional comments.";
+    const isEmergency = outcome === "MEDICAL_EMERGENCY";
+    
+    // Generate Twilio SMS content
+    let smsBody = "";
+    if (isEmergency) {
+        smsBody = `[CRITICAL EMERGENCY] MedRemind detected a severe crisis for ${patient} during their check-in for ${medication} ${dosage}.\nPatient reported severe distress: '${note}'\nPlease check on them immediately! Call Link: http://127.0.0.1:5000/?action=call&reminder_id=${log.reminder_id || 'test'}`;
+    } else {
+        let reason_text = "Patient did not successfully take their dose.";
+        if (outcome === "REFUSED") reason_text = "Patient actively refused taking the dose.";
+        else if (outcome === "CONFUSED") reason_text = "Patient exhibited disorientation or confusion.";
+        else if (outcome === "MEDICAL_CONCERN") reason_text = `Patient complained of feeling unwell: '${note}'`;
+        else if (outcome === "NO_RESPONSE_FAILED") reason_text = "Patient did not respond to any call attempts today.";
+        
+        smsBody = `[MedRemind Alert] Call escalation for ${patient} regarding their dose of ${medication} ${dosage}.\nStatus: ${outcome} - ${reason_text}\nPlease coordinate care. Call caregiver dashboard: http://127.0.0.1:5000/?action=call&reminder_id=${log.reminder_id || 'test'}`;
+    }
+    
+    // Format timestamp
+    const timeLabel = new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    
+    // Create Alert Notification HTML Element
+    const alertCard = document.createElement("div");
+    alertCard.className = "drawer-alert-card";
+    alertCard.innerHTML = `
+        <div class="drawer-alert-title-row">
+            <span class="drawer-alert-badge ${isEmergency ? 'badge-emergency' : 'badge-warning'}">${isEmergency ? 'Emergency (Tier 4)' : 'Warning (Tier 3)'}</span>
+            <span class="drawer-alert-time">${timeLabel}</span>
+        </div>
+        
+        <div class="drawer-alert-msg-container">
+            <span style="font-size:10.2px; font-weight:700; text-transform:uppercase; color:rgba(255,255,255,0.4); display:block; margin-bottom:4px;"><i data-lucide="smartphone" style="width:10px; height:10px; display:inline-block; vertical-align:middle; margin-right:4px;"></i> Mock Twilio SMS Broadcast</span>
+            <p class="drawer-alert-msg" style="margin: 0; line-height:1.5; font-size:12.5px;">${escapeHtml(smsBody)}</p>
+        </div>
+        
+        <div class="drawer-alert-actions">
+            <button class="btn btn-secondary btn-sm" onclick="closeAlertDrawer(); triggerPatientSimCall('${escapeHtml(patient)}')"><i data-lucide="phone" style="width:12px; height:12px;"></i> Call Now</button>
+            <button class="btn btn-primary btn-sm" onclick="closeAlertDrawer(); viewPatientInsights('${escapeHtml(patient)}')"><i data-lucide="trending-up" style="width:12px; height:12px;"></i> Stats</button>
+        </div>
+    `;
+    
+    // Prepend to content container
+    content.insertBefore(alertCard, content.firstChild);
+    
+    // Open the drawer
+    drawer.classList.add("active");
+    
+    // Bind close button dynamically inside drawer
+    const closeBtn = document.getElementById("btn-close-drawer");
+    if (closeBtn) closeBtn.onclick = closeAlertDrawer;
+    
+    // Auto-create icons
+    if (window.lucide) {
+        lucide.createIcons();
+    }
+}
+
+function closeAlertDrawer() {
+    const drawer = document.getElementById("notification-drawer");
+    if (drawer) drawer.classList.remove("active");
+}
+
+function playNotificationSound() {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Double electronic chime (standard emergency pager ring)
+        const osc1 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        osc1.connect(gain1);
+        gain1.connect(audioCtx.destination);
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+        gain1.gain.setValueAtTime(0.25, audioCtx.currentTime);
+        gain1.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        osc1.start(audioCtx.currentTime);
+        osc1.stop(audioCtx.currentTime + 0.35);
+        
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.1); // G5
+        gain2.gain.setValueAtTime(0.3, audioCtx.currentTime + 0.1);
+        gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+        osc2.start(audioCtx.currentTime + 0.1);
+        osc2.stop(audioCtx.currentTime + 0.45);
+    } catch(e) {
+        console.warn("Web Audio API blocked or not supported:", e);
+    }
 }
 
 
